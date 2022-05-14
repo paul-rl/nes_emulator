@@ -57,6 +57,9 @@ impl CPU {
                         self.status = self.status & 0b0111_1111; // Unset Negative
                     }
                 }
+                0x00 => {// BRK: Break
+                    return;
+                }
                 _ => todo!("")
             }
         } // REPEAT
