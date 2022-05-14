@@ -9,6 +9,7 @@ pub struct CPU {
     // E.g. if value is 0100011: Zero, Overflow, Negative flags all set
     pub status: u8,
     pub program_counter: u16, // Holds address for next instruction
+    pub memory: [u8; 0xFFFF] // 64 KiB array simulating memory
 }
 
 impl CPU {
@@ -18,29 +19,72 @@ impl CPU {
             register_x: 0,
             status: 0,
             program_counter: 0,
+            memory: [0; 0xFFFF],
         }
+    }
+
+    pub fn mem_read(&self, addr: u16) -> u8{
+        self.memory[addr as usize]
+    }
+
+    pub fn mem_write(&mut self, addr: u16, data: u8) {
+        self.memory[addr as usize] = data;
+    }
+
+    // NES uses little endian for u16: 0x8000 written as 00 80 (L to R)
+    // When reading u16, read two consecutive registers, and switch their order around to get
+    // the stored value
+    pub fn mem_read_u16(&self, addr: u16) -> u16{
+        let lo: u16 = self.mem_read(addr) as u16;
+        let hi: u16 = self.mem_read(addr + 1) as u16;
+        (hi << 8) | lo
+    }
+
+    // When writing u16, take upper and lower 8 bits and store them in reverse order.
+    pub fn mem_write_u16(&mut self, addr: u16, data: u16){
+        let hi: u8 = (data >> 8) as u8; // Extract last 8 bits
+        let lo: u8 = (data & 0xff) as u8; // Extract first 8 bits
+        self.mem_write(addr, lo);
+        self.mem_write(addr + 1, hi);
+    }
+
+    pub fn load_and_run(&mut self, program: Vec<u8>){
+        self.load(program);
+        self.reset();
+        self.run();
+    }
+
+    pub fn load(&mut self, program: Vec<u8>){
+        self.memory[0x8000 .. (0x8000 + program.len())].copy_from_slice(&program[..]); // Load program into memory
+        self.mem_write_u16(0xFFFC, 0x8000);
+    }
+
+    // Restore set of all registers and initialize PC to 2 byte value stored in 0xFFFC
+    pub fn reset(&mut self){
+        self.register_a = 0;
+        self.register_x = 0;
+        self.status = 0;
+        self.program_counter = self.mem_read_u16(0xFFFC);
     }
 
     // Interprets instructions.
     // Takes mutable reference to self to change registers and program instructions.
-    pub fn interpret(&mut self, program: Vec<u8>) {
-        self.program_counter = 0;
-
+    pub fn run(&mut self) {
         // CPU Cycle:
         // Fetch
         // Decode
         // Execute
         // Repeat
-
         '_cpu_cycle: loop {
-            let opcode = program[self.program_counter as usize]; // Fetch
+            
+            let opcode: u8 = self.mem_read(self.program_counter); // Fetch
             self.program_counter += 1; // PC UPDATE
-
+            
             match opcode {
                 // DECODE, then on match EXECUTE
                 0xA9 => {
                     //LDA: Load Accumulator with Memory
-                    let param = program[self.program_counter as usize];
+                    let param = self.mem_read(self.program_counter);
                     self.program_counter += 1;
                     self.lda(param);
                 }
@@ -68,11 +112,13 @@ impl CPU {
 
     // INX: Increment index X by one
     fn inx(&mut self) {
+        print!("Pre {}", self.register_x);
         match self.register_x {
             0xff => self.register_x = 0,
             _ => self.register_x += 1,
         }
-
+        print!("Post {}", self.register_x);
+        
         self.update_zero_and_negative_flags(self.register_x);
     }
 
@@ -93,6 +139,7 @@ impl CPU {
     }
 }
 
+
 #[cfg(test)]
 mod test {
     use super::*; // all functions in parent
@@ -101,7 +148,7 @@ mod test {
     #[test]
     fn test_0xa9_lda_immediate_load_date() {
         let mut cpu: CPU = CPU::new();
-        cpu.interpret(vec![0xa9, 0x05, 0x00]); // LDA 0X05 BRK
+        cpu.load_and_run(vec![0xa9, 0x05, 0x00]); // LDA 0X05 BRK
         assert_eq!(cpu.register_a, 0x05); // Value loaded onto Accumulator
         assert!(cpu.status & 0b0000_0010 == 0); // Zero flag set
         assert!(cpu.status & 0b1000_0000 == 0); // Negative flag not set
@@ -109,14 +156,14 @@ mod test {
     #[test]
     fn test_0xa9_lda_zero_flag() {
         let mut cpu: CPU = CPU::new();
-        cpu.interpret(vec![0xa9, 0x00, 0x00]); // LDA 0X00 BRK
+        cpu.load_and_run(vec![0xa9, 0x00, 0x00]); // LDA 0X00 BRK
         assert_eq!(cpu.register_a, 0x00); // Value loaded onto Accumulator
         assert!(cpu.status & 0b0000_0010 == 0b0000_0010); // Zero flag set
     }
     #[test]
     fn test_0xa9_lda_negative_flag() {
         let mut cpu: CPU = CPU::new();
-        cpu.interpret(vec![0xa9, 0b1000_0001, 0x00]); // LDA 0X41 BRK
+        cpu.load_and_run(vec![0xa9, 0b1000_0001, 0x00]); // LDA 0X41 BRK
         assert_eq!(cpu.register_a, 0b1000_0001); // Value loaded onto Accumulator
         assert!(cpu.status & 0b1000_0000 == 0b1000_0000); // Negative flag set
     }
@@ -125,8 +172,11 @@ mod test {
     fn test_0xaa_tax_move_a_to_x() {
         let mut cpu: CPU = CPU::new();
         cpu.register_a = 10;
-        cpu.interpret(vec![0xAA, 0x00]); // TAX BRK
-        assert_eq!(cpu.register_a, 10); // Value loaded onto Accumulator
+        cpu.load(vec![0xAA, 0x00]); // TAX BRK
+        cpu.program_counter = cpu.mem_read_u16(0xFFFC);
+        cpu.run();
+        
+        assert_eq!(cpu.register_x, 10); // Value loaded onto Accumulator
         assert!(cpu.status & 0b0000_0010 == 0); // Zero flag not set
         assert!(cpu.status & 0b1000_0000 == 0); // Negative flag not set
     }
@@ -134,7 +184,9 @@ mod test {
     fn test_0xaa_tax_move_a_to_x_negative() {
         let mut cpu: CPU = CPU::new();
         cpu.register_a = 0b1000_0001;
-        cpu.interpret(vec![0xAA, 0x00]); // TAX BRK
+        cpu.load(vec![0xaa, 0x00]); // TAX BRK
+        cpu.program_counter = cpu.mem_read_u16(0xFFFC);
+        cpu.run();
         assert_eq!(cpu.register_a, 0b1000_0001); // Value loaded onto Accumulator
         assert!(cpu.status & 0b0000_0010 == 0); // Zero flag not set
         assert!(cpu.status & 0b1000_0000 != 0); // Negative flag set
@@ -143,7 +195,9 @@ mod test {
     fn test_0xaa_tax_move_a_to_x_zero() {
         let mut cpu: CPU = CPU::new();
         cpu.register_a = 0;
-        cpu.interpret(vec![0xAA, 0x00]); // TAX BRK
+        cpu.load(vec![0xAA, 0x00]); // TAX BRK
+        cpu.program_counter = cpu.mem_read_u16(0xFFFC);
+        cpu.run();
         assert_eq!(cpu.register_a, 0); // Value loaded onto Accumulator
         assert!(cpu.status & 0b0000_0010 != 0); // Zero flag not set
     }
@@ -151,7 +205,7 @@ mod test {
     #[test]
     fn test_5_ops_working_together() {
         let mut cpu: CPU = CPU::new();
-        cpu.interpret(vec![0xa9, 0xc0, 0xaa, 0xe8, 0x00]);
+        cpu.load_and_run(vec![0xa9, 0xc0, 0xaa, 0xe8, 0x00]);
         assert_eq!(cpu.register_x, 0xc1);
     }
 
@@ -159,7 +213,35 @@ mod test {
     fn test_inx_overflow() {
         let mut cpu: CPU = CPU::new();
         cpu.register_x = 0xff;
-        cpu.interpret(vec![0xe8, 0xe8, 0x00]);
+        cpu.load(vec![0xe8, 0xe8, 0x00]);
+        cpu.program_counter = cpu.mem_read_u16(0xFFFC);
+        cpu.run();
         assert_eq!(cpu.register_x, 1);
     }
+    #[test]
+    fn test_program_load(){
+        let mut cpu: CPU = CPU::new();
+        let program: Vec<u8> = vec![0xe8, 0xe8, 0xe8, 0xaa, 0x00];
+        cpu.load(program.clone());
+        let mut i: u16 = 0;
+        for data in program.iter(){
+            let data_in_memory: u8 = cpu.memory[(0x8000 + i) as usize];
+            i+=1;
+            assert_eq!(data_in_memory, *data);
+        }
+    }
+
+    #[test]
+    fn test_mem_read(){
+        let mut cpu: CPU = CPU::new();
+        let program: Vec<u8> = vec![0xe8, 0xe8, 0xe8, 0xaa, 0x00];
+        cpu.load(program.clone());
+        let mut i: u16 = 0;
+        for data in program.iter(){
+            let data_in_memory: u8 = cpu.mem_read(0x8000 + i);
+            i+=1;
+            assert_eq!(data_in_memory, *data);
+        }
+    }
+    
 }
