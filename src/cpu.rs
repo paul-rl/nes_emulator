@@ -1,4 +1,6 @@
+pub fn main(){
 
+}
 // CPU Registers:
 pub struct CPU {
     pub register_a: u8, // Accumulator
@@ -29,8 +31,9 @@ impl CPU {
         // Decode
         // Execute
         // Repeat
+        
 
-        'cpu_cycle: loop {
+        '_cpu_cycle: loop {
             let opcode = program[self.program_counter as usize]; // Fetch
             self.program_counter += 1; // PC UPDATE
 
@@ -54,9 +57,8 @@ impl CPU {
                         self.status = self.status & 0b0111_1111; // Unset Negative
                     }
                 }
-
+                _ => todo!("")
             }
         } // REPEAT
-
     }
 }
