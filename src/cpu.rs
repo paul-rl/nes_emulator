@@ -1,8 +1,24 @@
 pub fn main() {}
+
+#[derive(Debug)]
+#[allow(non_camel_case_types)]
+pub enum AddressingMode {
+    Immediate,
+    ZeroPage,
+    ZeroPage_X,
+    ZeroPage_Y,
+    Absolute,
+    Absolute_X,
+    Absolute_Y,
+    Indirect_X,
+    Indirect_Y,
+    NoneAddressing
+}
 // CPU Registers:
 pub struct CPU {
     pub register_a: u8, // Accumulator
     pub register_x: u8,
+    pub register_y: u8,
     // Represents status, each bit is a flag (in order below):
     // Negative, Overflow, ____ (unused, always set), Break,
     // Decimal, Interrupt Disable, Zero, Carry
@@ -17,16 +33,64 @@ impl CPU {
         CPU {
             register_a: 0,
             register_x: 0,
+            register_y: 0,
             status: 0,
             program_counter: 0,
             memory: [0; 0xFFFF],
         }
     }
 
+    pub fn get_operand_address(&self, mode: &AddressingMode) -> u16{
+        match mode{
+            AddressingMode::Immediate => self.program_counter,
+            AddressingMode::ZeroPage => self.mem_read(self.program_counter) as u16,
+            AddressingMode::ZeroPage_X => {
+                let pos: u8 = self.mem_read(self.program_counter);
+                let addr: u16 = pos.wrapping_add(self.register_x) as u16;
+                addr
+            }
+            AddressingMode::ZeroPage_Y => {
+                let pos: u8 = self.mem_read(self.program_counter);
+                let addr: u16 = pos.wrapping_add(self.register_y) as u16;
+                addr
+            },
+            AddressingMode::Absolute => self.mem_read_u16(self.program_counter),
+            AddressingMode::Absolute_X => {
+                let pos: u16 = self.mem_read_u16(self.program_counter);
+                let addr: u16 = pos.wrapping_add(self.register_x as u16) as u16;
+                addr
+            }
+            AddressingMode::Absolute_Y => {
+                let pos: u16 = self.mem_read_u16(self.program_counter);
+                let addr: u16 = pos.wrapping_add(self.register_y as u16) as u16;
+                addr
+            }
+            AddressingMode::Indirect_X => {
+                let pos: u8 = self.mem_read(self.program_counter);
+                let ptr: u8 = pos.wrapping_add(self.register_x);
+                let lo: u8 = self.mem_read(ptr as u16);
+                let hi: u8 = self.mem_read(ptr.wrapping_add(1) as u16);
+                (hi as u16) << 8 | (lo as u16)
+            }
+            AddressingMode::Indirect_Y => {
+                let pos: u8 = self.mem_read(self.program_counter);
+                // Read lo then hi, little endian
+                let lo: u8 = self.mem_read(pos as u16);
+                let hi: u8 = self.mem_read(pos.wrapping_add(1) as u16);
+                let deref_pos: u16 = (hi as u16) << 8 | (lo as u16);
+                deref_pos.wrapping_add(self.register_y as u16)
+            }
+            AddressingMode::NoneAddressing => {
+                panic!("mode {:?} is not supported", mode);
+            }
+        }
+    }
+    // Reads from given address in memory
     pub fn mem_read(&self, addr: u16) -> u8{
         self.memory[addr as usize]
     }
 
+    // Writes data to given address
     pub fn mem_write(&mut self, addr: u16, data: u8) {
         self.memory[addr as usize] = data;
     }
@@ -48,12 +112,14 @@ impl CPU {
         self.mem_write(addr + 1, hi);
     }
 
+    // Loads program into memory, resets registers, then runs the program
     pub fn load_and_run(&mut self, program: Vec<u8>){
         self.load(program);
         self.reset();
         self.run();
     }
 
+    // Loads program into memory and sets PC to value found in 0xFFFC
     pub fn load(&mut self, program: Vec<u8>){
         self.memory[0x8000 .. (0x8000 + program.len())].copy_from_slice(&program[..]); // Load program into memory
         self.mem_write_u16(0xFFFC, 0x8000);
@@ -113,10 +179,7 @@ impl CPU {
     // INX: Increment index X by one
     fn inx(&mut self) {
         print!("Pre {}", self.register_x);
-        match self.register_x {
-            0xff => self.register_x = 0,
-            _ => self.register_x += 1,
-        }
+        self.register_x = self.register_x.wrapping_add(1);
         print!("Post {}", self.register_x);
         
         self.update_zero_and_negative_flags(self.register_x);
