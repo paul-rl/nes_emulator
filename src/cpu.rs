@@ -1,3 +1,4 @@
+use crate::opcodes::OpCode;
 pub fn main() {}
 
 #[derive(Debug)]
@@ -27,6 +28,7 @@ pub struct CPU {
     pub program_counter: u16, // Holds address for next instruction
     pub memory: [u8; 0xFFFF], // 64 KiB array simulating memory
 }
+
 
 impl CPU {
     pub fn new() -> Self {
