@@ -165,7 +165,7 @@ impl CPU {
                 0xea => {}                                                  // NOP
                 0x69 | 0x65 | 0x75 | 0x6d | 0x7d | 0x79 | 0x61 | 0x71 => {} // ADC
                 0xe9 | 0xe5 | 0xf5 | 0xed | 0xfd | 0xf9 | 0xe1 | 0xf1 => {} // SBC
-                0x29 | 0x25 | 0x35 | 0x2d | 0x3d | 0x39 | 0x21 | 0x31 => {} // AND
+                0x29 | 0x25 | 0x35 | 0x2d | 0x3d | 0x39 | 0x21 | 0x31 => self.and(&mode), // AND
                 0x49 | 0x45 | 0x55 | 0x4d | 0x5d | 0x59 | 0x41 | 0x51 => {} // EOR
                 0x09 | 0x05 | 0x15 | 0x0d | 0x1d | 0x19 | 0x01 | 0x11 => {} // ORA
                 0x0a | 0x06 | 0x16 | 0x0e | 0x1e => {}                      // ASL
@@ -240,7 +240,7 @@ impl CPU {
         self.register_x = self.mem_read(self.get_operand_address(mode));
         self.update_zero_and_negative_flags(self.register_x);
     }
-
+    // LDY: Load Index Register Y From Memory
     fn ldy(&mut self, mode: &AddressingMode) {
         self.register_y = self.mem_read(self.get_operand_address(mode));
         self.update_zero_and_negative_flags(self.register_y);
@@ -261,6 +261,12 @@ impl CPU {
         self.register_x = self.register_x.wrapping_add(1);
 
         self.update_zero_and_negative_flags(self.register_x);
+    }
+
+    // AND: "AND" Memory with Accumulator
+    fn and(&mut self, mode: &AddressingMode){
+        let data: u8 = self.mem_read(self.get_operand_address(mode) as u16);
+        self.register_a = self.register_a & data;
     }
 
     fn update_zero_and_negative_flags(&mut self, result: u8) {
@@ -293,7 +299,7 @@ mod test {
         assert_eq!(cpu.register_a, 0x55);
     }
     #[test]
-    fn test_0xa9_lda_immediate_load_date() {
+    fn test_0xa9_lda_immediate_load() {
         let mut cpu: CPU = CPU::new();
         cpu.load_and_run(vec![0xa9, 0x05, 0x00]); // LDA 0x05 BRK
         assert_eq!(cpu.register_a, 0x05); // Value loaded onto Accumulator
@@ -301,7 +307,7 @@ mod test {
         assert!(cpu.status & 0b1000_0000 == 0); // Negative flag not set
     }
     #[test]
-    fn test_0xad_lda_absolute_load_date() {
+    fn test_0xad_lda_absolute_load() {
         let mut cpu: CPU = CPU::new();
         cpu.memory[0x2805] = 22;
         cpu.load(vec![0xad, 0x05, 0x28, 0x00]); // LDA Absolute 0x0005 BRK
@@ -312,7 +318,7 @@ mod test {
         assert!(cpu.status & 0b1000_0000 == 0); // Negative flag not set
     }
     #[test]
-    fn test_0xbd_lda_absolute_x_load_date() {
+    fn test_0xbd_lda_absolute_x_load() {
         let mut cpu: CPU = CPU::new();
         cpu.register_x = 1;
         cpu.mem_write((0x2805 as u16).wrapping_add(cpu.register_x as u16), 0x16);
@@ -324,7 +330,7 @@ mod test {
         assert!(cpu.status & 0b1000_0000 == 0); // Negative flag not set
     }
     #[test]
-    fn test_0xb9_lda_absolute_y_load_date() {
+    fn test_0xb9_lda_absolute_y_load() {
         let mut cpu: CPU = CPU::new();
         cpu.register_y = 1;
         cpu.mem_write((0x2805 as u16).wrapping_add(cpu.register_y as u16), 0x16);
@@ -336,7 +342,7 @@ mod test {
         assert!(cpu.status & 0b1000_0000 == 0); // Negative flag not set
     }
     #[test]
-    fn test_0xa5_lda_zero_page_load_date() {
+    fn test_0xa5_lda_zero_page_load() {
         let mut cpu: CPU = CPU::new();
         cpu.mem_write(0x05, 0x16);
         cpu.load_and_run(vec![0xa5, 0x05, 0x00]); // LDA Absolute 0x0005 BRK
@@ -346,7 +352,7 @@ mod test {
         assert!(cpu.status & 0b1000_0000 == 0); // Negative flag not set
     }
     #[test]
-    fn test_0xb5_lda_zero_page_x_load_date() {
+    fn test_0xb5_lda_zero_page_x_load() {
         let mut cpu: CPU = CPU::new();
         cpu.register_x = 1;
         cpu.mem_write((0x05 as u8).wrapping_add(cpu.register_x) as u16, 0x16);
@@ -358,7 +364,7 @@ mod test {
         assert!(cpu.status & 0b1000_0000 == 0); // Negative flag not set
     }
     #[test]
-    fn test_0xa1_lda_zero_page_x_indirect_load_date() {
+    fn test_0xa1_lda_zero_page_x_indirect_load() {
         let mut cpu: CPU = CPU::new();
         cpu.register_x = 1;
 
@@ -371,7 +377,7 @@ mod test {
         assert!(cpu.status & 0b1000_0000 == 0); // Negative flag not set
     }
     #[test]
-    fn test_0xb1_lda_zero_page_y_indirect_load_date() {
+    fn test_0xb1_lda_zero_page_y_indirect_load() {
         let mut cpu: CPU = CPU::new();
         cpu.register_y = 1;
         cpu.load(vec![0xb1, 0x05, 0x00]); // LDA Absolute 0x0005 BRK
@@ -397,6 +403,33 @@ mod test {
         assert!(cpu.status & 0b1000_0000 == 0b1000_0000); // Negative flag set
     }
 
+    #[test]
+    // Test for LDX:
+    fn test_0xa2_ldx_immediate_load() {
+        let mut cpu: CPU = CPU::new();
+        cpu.load(vec![0xa2, 0x05, 0x00]); // LDA 0x05 BRK
+        cpu.program_counter = cpu.mem_read_u16(0xFFFC);
+        cpu.run();
+        assert_eq!(cpu.register_x, 0x05); // Value loaded onto Accumulator
+        assert!(cpu.status & 0b0000_0010 == 0); // Zero flag not set
+        assert!(cpu.status & 0b1000_0000 == 0); // Negative flag not set
+    }
+
+    #[test]
+    // Since we have already tested addresing modes, we can skip this.
+    // If time allows, make test for each opcode
+    // Test for LDY:
+    fn test_0xa2_ldy_immediate_load() {
+        let mut cpu: CPU = CPU::new();
+        cpu.load(vec![0xa2, 0x05, 0x00]); // LDA 0x05 BRK
+        cpu.program_counter = cpu.mem_read_u16(0xFFFC);
+        cpu.run();
+        assert_eq!(cpu.register_x, 0x05); // Value loaded onto Accumulator
+        assert!(cpu.status & 0b0000_0010 == 0); // Zero flag not set
+        assert!(cpu.status & 0b1000_0000 == 0); // Negative flag not set
+    }
+   
+    
     #[test]
     fn test_0xaa_tax_move_a_to_x() {
         let mut cpu: CPU = CPU::new();
