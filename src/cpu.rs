@@ -21,6 +21,7 @@ pub struct CPU {
     pub register_a: u8, // Accumulator
     pub register_x: u8,
     pub register_y: u8,
+    pub stack_ptr: u8,
     // Represents status, each bit is a flag (in order below):
     // Negative, Overflow, ____ (unused, always set), Break,
     // Decimal, Interrupt Disable, Zero, Carry
@@ -36,12 +37,12 @@ impl CPU {
             register_a: 0,
             register_x: 0,
             register_y: 0,
+            stack_ptr: 0,
             status: 0,
             program_counter: 0,
             memory: [0; 0xFFFF],
         }
     }
-
     pub fn get_operand_address(&self, mode: &AddressingMode) -> u16 {
         match mode {
             AddressingMode::Immediate => self.program_counter,
@@ -91,12 +92,10 @@ impl CPU {
     pub fn mem_read(&self, addr: u16) -> u8 {
         self.memory[addr as usize]
     }
-
     // Writes data to given address
     pub fn mem_write(&mut self, addr: u16, data: u8) {
         self.memory[addr as usize] = data;
     }
-
     // NES uses little endian for u16: 0x8000 written as 00 80 (L to R)
     // When reading u16, read two consecutive registers, and switch their order around to get
     // the stored value
@@ -105,7 +104,6 @@ impl CPU {
         let hi: u16 = self.mem_read(addr + 1) as u16;
         (hi << 8) | (lo as u16)
     }
-
     // When writing u16, take upper and lower 8 bits and store them in reverse order.
     pub fn mem_write_u16(&mut self, addr: u16, data: u16) {
         let hi: u8 = (data >> 8) as u8; // Extract last 8 bits
@@ -113,20 +111,17 @@ impl CPU {
         self.mem_write(addr, lo);
         self.mem_write(addr + 1, hi);
     }
-
     // Loads program into memory, resets registers, then runs the program
     pub fn load_and_run(&mut self, program: Vec<u8>) {
         self.load(program);
         self.reset();
         self.run();
     }
-
     // Loads program into memory and sets PC to value found in 0xFFFC
     pub fn load(&mut self, program: Vec<u8>) {
         self.memory[0x8000..(0x8000 + program.len())].copy_from_slice(&program[..]); // Load program into memory
         self.mem_write_u16(0xFFFC, 0x8000);
     }
-
     // Restore set of all registers and initialize PC to 2 byte value stored in 0xFFFC
     pub fn reset(&mut self) {
         self.register_a = 0;
@@ -134,7 +129,6 @@ impl CPU {
         self.status = 0;
         self.program_counter = self.mem_read_u16(0xFFFC);
     }
-
     // Interprets instructions.
     // Takes mutable reference to self to change registers and program instructions.
     pub fn run(&mut self) {
@@ -208,11 +202,11 @@ impl CPU {
                 0x78 => {}                                                  // SEI
                 0xf8 => {}                                                  // SED
                 0xaa => self.tax(),                                         // TAX
-                0xa8 => {}                                                  // TAY
-                0xba => {}                                                  // TSX
-                0x8A => {}                                                  // TXA
-                0x9a => {}                                                  // TXS
-                0x98 => {}                                                  // TYA
+                0xa8 => self.tay(),                                         // TAY
+                0xba => self.tsx(),                                         // TSX
+                0x8A => self.txa(),                                                  // TXA
+                0x9a => self.txs(),                                                  // TXS
+                0x98 => self.tya(),                                                  // TYA
                 0x48 => {}                                                  // PHA
                 0x68 => {}                                                  // PLA
                 0x08 => {}                                                  // PHP
@@ -228,13 +222,11 @@ impl CPU {
             }
         } // REPEAT
     }
-
     // LDA: Load Accumulator to Memory
     fn lda(&mut self, mode: &AddressingMode) {
         self.register_a = self.mem_read(self.get_operand_address(mode));
         self.update_zero_and_negative_flags(self.register_a);
     }
-
     // LDX: Load Index Register X From Memory
     fn ldx(&mut self, mode: &AddressingMode) {
         self.register_x = self.mem_read(self.get_operand_address(mode));
@@ -262,14 +254,36 @@ impl CPU {
         self.register_x = self.register_a;
         self.update_zero_and_negative_flags(self.register_x);
     }
-
+    // TAY: Transfer Accumulator to Y
+    fn tay(&mut self) {
+        self.register_y = self.register_a;
+        self.update_zero_and_negative_flags(self.register_y);
+    }
+    // TSX: Transfer Stack Pointer to X
+    fn tsx(&mut self) {
+        self.register_x = self.stack_ptr;
+        self.update_zero_and_negative_flags(self.register_x);
+    }
+    // TXA: Transfer X to Accumulator
+    fn txa(&mut self) {
+        self.register_a = self.register_x;
+        self.update_zero_and_negative_flags(self.register_a);
+    }
+    // TXS: Transfer X to Stack Pointer
+    fn txs(&mut self) {
+        self.stack_ptr = self.register_x;
+    }
+    // TYA: Transfer Y to Accumulator
+    fn tya(&mut self) {
+        self.register_a = self.register_y;
+        self.update_zero_and_negative_flags(self.register_a);
+    }
     // INX: Increment index X by one
     fn inx(&mut self) {
         self.register_x = self.register_x.wrapping_add(1);
 
         self.update_zero_and_negative_flags(self.register_x);
     }
-
     // AND: "AND" Memory with Accumulator
     fn and(&mut self, mode: &AddressingMode){
         let data: u8 = self.mem_read(self.get_operand_address(mode) as u16);
@@ -277,7 +291,6 @@ impl CPU {
         println!("rega is: {:b}", self.register_a);
         self.register_a = self.register_a & data;
     }
-
     fn update_zero_and_negative_flags(&mut self, result: u8) {
         // Set flags depending on Accumulator value
         // Check if Accumulator is 0
@@ -466,6 +479,52 @@ mod test {
         cpu.run();
         assert_eq!(cpu.register_x, 0); // Value loaded onto Accumulator
         assert!(cpu.status & 0b0000_0010 != 0); // Zero flag not set
+    }
+    #[test]
+    fn test_0xa8_tay_move_a_to_y() {
+        let mut cpu: CPU = CPU::new();
+        cpu.register_a = 10;
+        cpu.load(vec![0xa8, 0x00]); // TAX BRK
+        cpu.program_counter = cpu.mem_read_u16(0xFFFC);
+        cpu.run();
+
+        assert_eq!(cpu.register_y, 10); // Value loaded onto Accumulator
+        assert!(cpu.status & 0b0000_0010 == 0); // Zero flag not set
+        assert!(cpu.status & 0b1000_0000 == 0); // Negative flag not set
+    }
+    #[test]
+    fn test_0xba_tsx_move_stack_ptr_to_x() {
+        let mut cpu: CPU = CPU::new();
+        cpu.stack_ptr = 10;
+        cpu.load(vec![0xba, 0x00]); // TAX BRK
+        cpu.program_counter = cpu.mem_read_u16(0xFFFC);
+        cpu.run();
+
+        assert_eq!(cpu.register_x, 10); // Value loaded onto Accumulator
+        assert!(cpu.status & 0b0000_0010 == 0); // Zero flag not set
+        assert!(cpu.status & 0b1000_0000 == 0); // Negative flag not set
+    }
+    #[test]
+    fn test_0x8a_txa_move_x_to_a() {
+        let mut cpu: CPU = CPU::new();
+        cpu.register_x = 10;
+        cpu.load(vec![0x8a, 0x00]); // TAX BRK
+        cpu.program_counter = cpu.mem_read_u16(0xFFFC);
+        cpu.run();
+
+        assert_eq!(cpu.register_a, 10); // Value loaded onto Accumulator
+        assert!(cpu.status & 0b0000_0010 == 0); // Zero flag not set
+        assert!(cpu.status & 0b1000_0000 == 0); // Negative flag not set
+    }
+    #[test]
+    fn test_0x9a_txs_move_x_to_stack_ptr() {
+        let mut cpu: CPU = CPU::new();
+        cpu.register_x = 10;
+        cpu.load(vec![0x9a, 0x00]); // TAX BRK
+        cpu.program_counter = cpu.mem_read_u16(0xFFFC);
+        cpu.run();
+
+        assert_eq!(cpu.stack_ptr, 10); // Value loaded onto Accumulator
     }
     #[test]
     fn test_5_ops_working_together() {
