@@ -22,6 +22,7 @@ pub struct CPU {
     pub register_x: u8,
     pub register_y: u8,
     pub stack_ptr: u8,
+    pub stack_start: u16,
     // Represents status, each bit is a flag (in order below):
     // Negative, Overflow, ____ (unused, always set), Break,
     // Decimal, Interrupt Disable, Zero, Carry
@@ -37,7 +38,8 @@ impl CPU {
             register_a: 0,
             register_x: 0,
             register_y: 0,
-            stack_ptr: 0,
+            stack_ptr: 0xff,
+            stack_start: 0x0100,
             status: 0,
             program_counter: 0,
             memory: [0; 0xFFFF],
@@ -207,10 +209,10 @@ impl CPU {
                 0x8A => self.txa(),                                                  // TXA
                 0x9a => self.txs(),                                                  // TXS
                 0x98 => self.tya(),                                                  // TYA
-                0x48 => {}                                                  // PHA
-                0x68 => {}                                                  // PLA
-                0x08 => {}                                                  // PHP
-                0x28 => {}                                                  // PLP
+                0x48 => self.pha(),                                                  // PHA
+                0x68 => self.pla(),                                                  // PLA
+                0x08 => self.php(),                                                  // PHP
+                0x28 => self.plp(),                                                  // PLP
 
                 _ => todo!(""),
             }
@@ -277,6 +279,27 @@ impl CPU {
     fn tya(&mut self) {
         self.register_a = self.register_y;
         self.update_zero_and_negative_flags(self.register_a);
+    }
+    // PHA: Push Accumulator On Stack
+    fn pha(&mut self) {
+        self.mem_write(self.stack_start + self.stack_ptr as u16, self.register_a);
+        self.stack_ptr = self.stack_ptr.wrapping_sub(1);
+    }
+    // PHA: Push Status On Stack
+    fn php(&mut self) {
+        self.mem_write(self.stack_start + self.stack_ptr as u16, self.status);
+        self.stack_ptr = self.stack_ptr.wrapping_sub(1);
+    }
+    // PLA: Pull Accumulator From Stack
+    fn pla(&mut self) {
+        self.stack_ptr = self.stack_ptr.wrapping_add(1);
+        self.register_a = self.mem_read(self.stack_start + self.stack_ptr as u16);
+        self.update_zero_and_negative_flags(self.register_a);
+    }
+    // PLP: Pull Status From Stack
+    fn plp(&mut self) {
+        self.stack_ptr = self.stack_ptr.wrapping_add(1);
+        self.status = self.mem_read(self.stack_start + self.stack_ptr as u16);
     }
     // INX: Increment index X by one
     fn inx(&mut self) {
