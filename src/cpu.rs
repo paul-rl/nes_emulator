@@ -198,8 +198,8 @@ impl CPU {
                 0xa2 | 0xa6 | 0xb6 | 0xae | 0xbe => self.ldx(&mode),        // LDX
                 0xa0 | 0xa4 | 0xb4 | 0xac | 0xbc => self.ldy(&mode),        // LDY
                 0x85 | 0x95 | 0x8d | 0x9d | 0x99 | 0x81 | 0x91 => self.sta(&mode), // STA
-                0x86 | 0x96 | 0x8e => {}                                    // STX
-                0x84 | 0x94 | 0x8c => {}                                    // STY
+                0x86 | 0x96 | 0x8e => self.stx(&mode),                                    // STX
+                0x84 | 0x94 | 0x8c => self.sty(&mode),                                    // STY
                 0xd8 => {}                                                  // CLD
                 0x58 => {}                                                  // CLI
                 0xb8 => {}                                                  // CLV
@@ -249,7 +249,14 @@ impl CPU {
     fn sta(&mut self, mode: &AddressingMode) {
         self.mem_write(self.get_operand_address(mode), self.register_a);
     }
-
+    // STY: Store Accumulator in Memory
+    fn sty(&mut self, mode: &AddressingMode) {
+        self.mem_write(self.get_operand_address(mode), self.register_y);
+    }
+    // STX: Store Accumulator in Memory
+    fn stx(&mut self, mode: &AddressingMode) {
+        self.mem_write(self.get_operand_address(mode), self.register_x);
+    }
     // TAX: Transfer Accumulator to X
     fn tax(&mut self) {
         self.register_x = self.register_a;
@@ -266,6 +273,8 @@ impl CPU {
     // AND: "AND" Memory with Accumulator
     fn and(&mut self, mode: &AddressingMode){
         let data: u8 = self.mem_read(self.get_operand_address(mode) as u16);
+        println!("data is: {:b}", data);
+        println!("rega is: {:b}", self.register_a);
         self.register_a = self.register_a & data;
     }
 
@@ -289,7 +298,6 @@ impl CPU {
 #[cfg(test)]
 mod test {
     use super::*; // all functions in parent
-
     // Tests for LDA:
     #[test]
     fn test_lda_from_memory() {
@@ -402,7 +410,6 @@ mod test {
         assert_eq!(cpu.register_a, 0b1000_0001); // Value loaded onto Accumulator
         assert!(cpu.status & 0b1000_0000 == 0b1000_0000); // Negative flag set
     }
-
     #[test]
     // Test for LDX:
     fn test_0xa2_ldx_immediate_load() {
@@ -414,11 +421,10 @@ mod test {
         assert!(cpu.status & 0b0000_0010 == 0); // Zero flag not set
         assert!(cpu.status & 0b1000_0000 == 0); // Negative flag not set
     }
-
-    #[test]
     // Since we have already tested addresing modes, we can skip this.
     // If time allows, make test for each opcode
     // Test for LDY:
+    #[test]
     fn test_0xa2_ldy_immediate_load() {
         let mut cpu: CPU = CPU::new();
         cpu.load(vec![0xa2, 0x05, 0x00]); // LDA 0x05 BRK
@@ -428,8 +434,6 @@ mod test {
         assert!(cpu.status & 0b0000_0010 == 0); // Zero flag not set
         assert!(cpu.status & 0b1000_0000 == 0); // Negative flag not set
     }
-   
-    
     #[test]
     fn test_0xaa_tax_move_a_to_x() {
         let mut cpu: CPU = CPU::new();
@@ -449,7 +453,7 @@ mod test {
         cpu.load(vec![0xaa, 0x00]); // TAX BRK
         cpu.program_counter = cpu.mem_read_u16(0xFFFC);
         cpu.run();
-        assert_eq!(cpu.register_a, 0b1000_0001); // Value loaded onto Accumulator
+        assert_eq!(cpu.register_x, 0b1000_0001); // Value loaded onto Accumulator
         assert!(cpu.status & 0b0000_0010 == 0); // Zero flag not set
         assert!(cpu.status & 0b1000_0000 != 0); // Negative flag set
     }
@@ -460,17 +464,15 @@ mod test {
         cpu.load(vec![0xAA, 0x00]); // TAX BRK
         cpu.program_counter = cpu.mem_read_u16(0xFFFC);
         cpu.run();
-        assert_eq!(cpu.register_a, 0); // Value loaded onto Accumulator
+        assert_eq!(cpu.register_x, 0); // Value loaded onto Accumulator
         assert!(cpu.status & 0b0000_0010 != 0); // Zero flag not set
     }
-
     #[test]
     fn test_5_ops_working_together() {
         let mut cpu: CPU = CPU::new();
         cpu.load_and_run(vec![0xa9, 0xc0, 0xaa, 0xe8, 0x00]);
         assert_eq!(cpu.register_x, 0xc1);
     }
-
     #[test]
     fn test_inx_overflow() {
         let mut cpu: CPU = CPU::new();
@@ -480,7 +482,6 @@ mod test {
         cpu.run();
         assert_eq!(cpu.register_x, 1);
     }
-
     #[test]
     fn test_program_load() {
         let mut cpu: CPU = CPU::new();
@@ -493,7 +494,6 @@ mod test {
             assert_eq!(data_in_memory, *data);
         }
     }
-
     #[test]
     fn test_mem_read() {
         let mut cpu: CPU = CPU::new();
@@ -506,11 +506,57 @@ mod test {
             assert_eq!(data_in_memory, *data);
         }
     }
-
     #[test]
     fn test_mem_write() {
         let mut cpu: CPU = CPU::new();
         cpu.mem_write(0xe8, 0xe8);
         assert_eq!(cpu.memory[0xe8], 0xe8);
+    }
+    // Test for AND
+    #[test]
+    fn test_0x29_and_immediate(){
+        let mut cpu: CPU = CPU::new();
+        cpu.register_a = 0b1111_0001;
+        let and_result: u8 = cpu.register_a & 0b1010_1111;
+        cpu.load(vec![0x29, 0b1010_1111, 0x00]);
+        cpu.program_counter = cpu.mem_read_u16(0xFFFC);
+        cpu.run();
+        assert_eq!(cpu.register_a, and_result);
+    }
+    #[test]
+    fn test_0x8d_sta_absolute(){
+        let mut cpu: CPU = CPU::new();
+        let program: Vec<u8> = vec![0x8d, 0x34, 0x12, 0x00];
+
+        cpu.register_a = 10;
+        cpu.load(program);
+        cpu.program_counter = cpu.mem_read_u16(0xFFFC);
+        cpu.run();
+
+        assert_eq!(cpu.mem_read(0x1234), cpu.register_a);
+    }
+    #[test]
+    fn test_0x8e_stx_absolute(){
+        let mut cpu: CPU = CPU::new();
+        let program: Vec<u8> = vec![0x8e, 0x34, 0x12, 0x00];
+
+        cpu.register_x = 10;
+        cpu.load(program);
+        cpu.program_counter = cpu.mem_read_u16(0xFFFC);
+        cpu.run();
+
+        assert_eq!(cpu.mem_read(0x1234), cpu.register_x);
+    }
+    #[test]
+    fn test_0x8c_sty_absolute(){
+        let mut cpu: CPU = CPU::new();
+        let program: Vec<u8> = vec![0x8c, 0x34, 0x12, 0x00];
+
+        cpu.register_y = 10;
+        cpu.load(program);
+        cpu.program_counter = cpu.mem_read_u16(0xFFFC);
+        cpu.run();
+
+        assert_eq!(cpu.mem_read(0x1234), cpu.register_y);
     }
 }
