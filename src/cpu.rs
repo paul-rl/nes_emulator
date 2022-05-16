@@ -1,4 +1,5 @@
-use crate::opcodes:: Instructions;
+use crate::opcodes::Instructions;
+use crate::opcodes::OpCode;
 pub fn main() {}
 
 #[derive(Debug)]
@@ -102,7 +103,7 @@ impl CPU {
     pub fn mem_read_u16(&self, addr: u16) -> u16 {
         let lo: u16 = self.mem_read(addr) as u16;
         let hi: u16 = self.mem_read(addr + 1) as u16;
-        (hi << 8) | lo
+        (hi << 8) | (lo as u16)
     }
 
     // When writing u16, take upper and lower 8 bits and store them in reverse order.
@@ -146,75 +147,84 @@ impl CPU {
         // Repeat
         '_cpu_cycle: loop {
             let opcode: u8 = self.mem_read(self.program_counter); // Fetch
-            let mode: &AddressingMode = &instructions.map.get(&opcode).expect("Failed to get from map").mode;
+            let operation: &OpCode = instructions
+                .map
+                .get(&opcode)
+                .expect("Failed to get from map");
+            let mode: &AddressingMode = &operation.mode;
             self.program_counter += 1; // PC UPDATE
-            
+            let first_program_counter: u16 = self.program_counter;
+
+            println!(
+                "Instruction: {}, Addressing Mode: {:?}",
+                operation.name, operation.mode
+            );
             // DECODE, then on match EXECUTE
             match opcode {
-                
-                0x00 => return, // BRK: Break
-                0xea => {}, // NOP
-                0x69 | 0x65 | 0x75 | 0x6d | 0x7d | 0x79 | 0x61 | 0x71 => {}, // ADC
-                0xe9 | 0xe5 | 0xf5 | 0xed | 0xfd | 0xf9 | 0xe1 | 0xf1 => {}, // SBC
-                0x29 | 0x25 | 0x35 | 0x2d | 0x3d | 0x39 | 0x21 | 0x31 => {}, // AND
-                0x49 | 0x45 | 0x55 | 0x4d | 0x5d | 0x59 | 0x41 | 0x51 =>{}, // EOR
-                0x09 | 0x05 | 0x15 | 0x0d | 0x1d | 0x19 | 0x01 | 0x11 =>{}, // ORA
-                0x0a | 0x06 | 0x16 | 0x0e | 0x1e => {}, // ASL
-                0x4a | 0x46 | 0x56 | 0x4e | 0x5e => {}, // LSR
-                0x2a | 0x26 | 0x36 | 0x2e | 0x3e => {}, // ROL
-                0x6a | 0x66 | 0x76 | 0x6e | 0x7e => {}, // ROR
-                0xe6 | 0xf6 | 0xee | 0xfe => {}, // INC
-                0xE8 => self.inx(), // INX
-                0xc8 => {}, // INY
-                0xc6 | 0xd6 | 0xce | 0xde => {}, // DEC
-                0xca => {}, // DEX
-                0x88 => {}, // DEY
-                0xc9 | 0xc5 | 0xd5 | 0xcd | 0xdd | 0xd9 | 0xc1 | 0xd1 => {}, // CMP
-                0xc0 | 0xc4 | 0xcc => {}, // CPY
-                0xe0 | 0xe4 | 0xec => {}, // CPX
-                0x4c | 0x6c => {}, // JMP
-                0x20 => {}, // JSR
-                0x60 => {}, // RTS
-                0x40 => {}, // RTI
-                0xd0 => {}, // BNE
-                0x70 => {}, // BVS
-                0x50 => {}, // BVC
-                0x30 => {}, // BMI
-                0xf0 => {}, // BEQ
-                0xb0 => {}, // BCS
-                0x90 => {}, // BCC
-                0x10 => {}, // BPL
-                0x24 | 0x2c => {}, // BIT
-                0xA9 | 0xa5 | 0xb5 | 0xad | 0xbd | 0xb9 | 0xa1 | 0xb1 => { // LDA
-                    self.lda(&mode);
-                    self.program_counter += 1;
-                }
-                0xa2 | 0xa6 | 0xb6 | 0xae | 0xbe => {}, // LDX
-                0xa0 | 0xa4 | 0xb4 | 0xac | 0xbc => {}, // LDY
-                0x85 | 0x95 | 0x8d | 0x9d | 0x99 | 0x81 | 0x91 => {
-                    self.sta(&mode)
-                }, // STA
-                0x86 | 0x96 | 0x8e => {}, // STX
-                0x84 | 0x94 | 0x8c => {}, // STY
-                0xd8 => {}, // CLD
-                0x58 => {}, // CLI
-                0xb8 => {}, // CLV
-                0x18 => {}, // TODO: CLV
-                0x38 => {}, // SEC
-                0x78 => {}, // SEI
-                0xf8 => {}, // SED
-                0xaa => self.tax(), // TAX
-                0xa8 => {}, // TAY
-                0xba => {}, // TSX
-                0x8A => {}, // TXA
-                0x9a => {}, // TXS
-                0x98 => {}, // TYA
-                0x48 => {}, // PHA
-                0x68 => {}, // PLA
-                0x08 => {}, // PHP
-                0x28 => {}, // PLP
+                0x00 => return,                                             // BRK: Break
+                0xea => {}                                                  // NOP
+                0x69 | 0x65 | 0x75 | 0x6d | 0x7d | 0x79 | 0x61 | 0x71 => {} // ADC
+                0xe9 | 0xe5 | 0xf5 | 0xed | 0xfd | 0xf9 | 0xe1 | 0xf1 => {} // SBC
+                0x29 | 0x25 | 0x35 | 0x2d | 0x3d | 0x39 | 0x21 | 0x31 => {} // AND
+                0x49 | 0x45 | 0x55 | 0x4d | 0x5d | 0x59 | 0x41 | 0x51 => {} // EOR
+                0x09 | 0x05 | 0x15 | 0x0d | 0x1d | 0x19 | 0x01 | 0x11 => {} // ORA
+                0x0a | 0x06 | 0x16 | 0x0e | 0x1e => {}                      // ASL
+                0x4a | 0x46 | 0x56 | 0x4e | 0x5e => {}                      // LSR
+                0x2a | 0x26 | 0x36 | 0x2e | 0x3e => {}                      // ROL
+                0x6a | 0x66 | 0x76 | 0x6e | 0x7e => {}                      // ROR
+                0xe6 | 0xf6 | 0xee | 0xfe => {}                             // INC
+                0xE8 => self.inx(),                                         // INX
+                0xc8 => {}                                                  // INY
+                0xc6 | 0xd6 | 0xce | 0xde => {}                             // DEC
+                0xca => {}                                                  // DEX
+                0x88 => {}                                                  // DEY
+                0xc9 | 0xc5 | 0xd5 | 0xcd | 0xdd | 0xd9 | 0xc1 | 0xd1 => {} // CMP
+                0xc0 | 0xc4 | 0xcc => {}                                    // CPY
+                0xe0 | 0xe4 | 0xec => {}                                    // CPX
+                0x4c | 0x6c => {}                                           // JMP
+                0x20 => {}                                                  // JSR
+                0x60 => {}                                                  // RTS
+                0x40 => {}                                                  // RTI
+                0xd0 => {}                                                  // BNE
+                0x70 => {}                                                  // BVS
+                0x50 => {}                                                  // BVC
+                0x30 => {}                                                  // BMI
+                0xf0 => {}                                                  // BEQ
+                0xb0 => {}                                                  // BCS
+                0x90 => {}                                                  // BCC
+                0x10 => {}                                                  // BPL
+                0x24 | 0x2c => {}                                           // BIT
+                0xA9 | 0xa5 | 0xb5 | 0xad | 0xbd | 0xb9 | 0xa1 | 0xb1 => self.lda(&mode), // LDA
+                0xa2 | 0xa6 | 0xb6 | 0xae | 0xbe => self.ldx(&mode),        // LDX
+                0xa0 | 0xa4 | 0xb4 | 0xac | 0xbc => self.ldy(&mode),        // LDY
+                0x85 | 0x95 | 0x8d | 0x9d | 0x99 | 0x81 | 0x91 => self.sta(&mode), // STA
+                0x86 | 0x96 | 0x8e => {}                                    // STX
+                0x84 | 0x94 | 0x8c => {}                                    // STY
+                0xd8 => {}                                                  // CLD
+                0x58 => {}                                                  // CLI
+                0xb8 => {}                                                  // CLV
+                0x18 => {}                                                  // TODO: CLV
+                0x38 => {}                                                  // SEC
+                0x78 => {}                                                  // SEI
+                0xf8 => {}                                                  // SED
+                0xaa => self.tax(),                                         // TAX
+                0xa8 => {}                                                  // TAY
+                0xba => {}                                                  // TSX
+                0x8A => {}                                                  // TXA
+                0x9a => {}                                                  // TXS
+                0x98 => {}                                                  // TYA
+                0x48 => {}                                                  // PHA
+                0x68 => {}                                                  // PLA
+                0x08 => {}                                                  // PHP
+                0x28 => {}                                                  // PLP
 
                 _ => todo!(""),
+            }
+
+            // PC hasn't changed, so no branching
+            if first_program_counter == self.program_counter {
+                // -1 because already moved up the instruction that was read
+                self.program_counter += (operation.num_bytes - 1) as u16;
             }
         } // REPEAT
     }
@@ -226,12 +236,12 @@ impl CPU {
     }
 
     // LDX: Load Index Register X From Memory
-    fn ldx (&mut self, mode: &AddressingMode) {
+    fn ldx(&mut self, mode: &AddressingMode) {
         self.register_x = self.mem_read(self.get_operand_address(mode));
         self.update_zero_and_negative_flags(self.register_x);
     }
 
-    fn ldy (&mut self, mode: &AddressingMode) { 
+    fn ldy(&mut self, mode: &AddressingMode) {
         self.register_y = self.mem_read(self.get_operand_address(mode));
         self.update_zero_and_negative_flags(self.register_y);
     }
@@ -248,9 +258,7 @@ impl CPU {
 
     // INX: Increment index X by one
     fn inx(&mut self) {
-        print!("Pre {}", self.register_x);
         self.register_x = self.register_x.wrapping_add(1);
-        print!("Post {}", self.register_x);
 
         self.update_zero_and_negative_flags(self.register_x);
     }
@@ -278,11 +286,100 @@ mod test {
 
     // Tests for LDA:
     #[test]
+    fn test_lda_from_memory() {
+        let mut cpu: CPU = CPU::new();
+        cpu.mem_write(0x10, 0x55);
+        cpu.load_and_run(vec![0xa5, 0x10, 0x00]);
+        assert_eq!(cpu.register_a, 0x55);
+    }
+    #[test]
     fn test_0xa9_lda_immediate_load_date() {
         let mut cpu: CPU = CPU::new();
-        cpu.load_and_run(vec![0xa9, 0x05, 0x00]); // LDA 0X05 BRK
+        cpu.load_and_run(vec![0xa9, 0x05, 0x00]); // LDA 0x05 BRK
         assert_eq!(cpu.register_a, 0x05); // Value loaded onto Accumulator
-        assert!(cpu.status & 0b0000_0010 == 0); // Zero flag set
+        assert!(cpu.status & 0b0000_0010 == 0); // Zero flag not set
+        assert!(cpu.status & 0b1000_0000 == 0); // Negative flag not set
+    }
+    #[test]
+    fn test_0xad_lda_absolute_load_date() {
+        let mut cpu: CPU = CPU::new();
+        cpu.memory[0x2805] = 22;
+        cpu.load(vec![0xad, 0x05, 0x28, 0x00]); // LDA Absolute 0x0005 BRK
+        cpu.program_counter = cpu.mem_read_u16(0xFFFC);
+        cpu.run();
+        assert_eq!(cpu.register_a, 22); // Value loaded onto Accumulator
+        assert!(cpu.status & 0b0000_0010 == 0); // Zero flag not set
+        assert!(cpu.status & 0b1000_0000 == 0); // Negative flag not set
+    }
+    #[test]
+    fn test_0xbd_lda_absolute_x_load_date() {
+        let mut cpu: CPU = CPU::new();
+        cpu.register_x = 1;
+        cpu.mem_write((0x2805 as u16).wrapping_add(cpu.register_x as u16), 0x16);
+        cpu.load(vec![0xbd, 0x05, 0x28, 0x00]); // LDA Absolute 0x0005 BRK
+        cpu.program_counter = cpu.mem_read_u16(0xFFFC);
+        cpu.run();
+        assert_eq!(cpu.register_a, 0x16); // Value loaded onto Accumulator
+        assert!(cpu.status & 0b0000_0010 == 0); // Zero flag not set
+        assert!(cpu.status & 0b1000_0000 == 0); // Negative flag not set
+    }
+    #[test]
+    fn test_0xb9_lda_absolute_y_load_date() {
+        let mut cpu: CPU = CPU::new();
+        cpu.register_y = 1;
+        cpu.mem_write((0x2805 as u16).wrapping_add(cpu.register_y as u16), 0x16);
+        cpu.load(vec![0xb9, 0x05, 0x28, 0x00]); // LDA Absolute 0x0005 BRK
+        cpu.program_counter = cpu.mem_read_u16(0xFFFC);
+        cpu.run();
+        assert_eq!(cpu.register_a, 0x16); // Value loaded onto Accumulator
+        assert!(cpu.status & 0b0000_0010 == 0); // Zero flag not set
+        assert!(cpu.status & 0b1000_0000 == 0); // Negative flag not set
+    }
+    #[test]
+    fn test_0xa5_lda_zero_page_load_date() {
+        let mut cpu: CPU = CPU::new();
+        cpu.mem_write(0x05, 0x16);
+        cpu.load_and_run(vec![0xa5, 0x05, 0x00]); // LDA Absolute 0x0005 BRK
+
+        assert_eq!(cpu.register_a, 0x16); // Value loaded onto Accumulator
+        assert!(cpu.status & 0b0000_0010 == 0); // Zero flag not set
+        assert!(cpu.status & 0b1000_0000 == 0); // Negative flag not set
+    }
+    #[test]
+    fn test_0xb5_lda_zero_page_x_load_date() {
+        let mut cpu: CPU = CPU::new();
+        cpu.register_x = 1;
+        cpu.mem_write((0x05 as u8).wrapping_add(cpu.register_x) as u16, 0x16);
+        cpu.load(vec![0xb5, 0x05, 0x00]); // LDA Absolute 0x0005 BRK
+        cpu.program_counter = cpu.mem_read_u16(0xFFFC);
+        cpu.run();
+        assert_eq!(cpu.register_a, 0x16); // Value loaded onto Accumulator
+        assert!(cpu.status & 0b0000_0010 == 0); // Zero flag not set
+        assert!(cpu.status & 0b1000_0000 == 0); // Negative flag not set
+    }
+    #[test]
+    fn test_0xa1_lda_zero_page_x_indirect_load_date() {
+        let mut cpu: CPU = CPU::new();
+        cpu.register_x = 1;
+
+        cpu.load(vec![0xa1, 0x05, 0x00]); // LDA Absolute 0x0005 BRK
+        cpu.mem_write(cpu.get_operand_address(&AddressingMode::Indirect_X), 0x16);
+        cpu.program_counter = cpu.mem_read_u16(0xFFFC);
+        cpu.run();
+        assert_eq!(cpu.register_a, 0x16); // Value loaded onto Accumulator
+        assert!(cpu.status & 0b0000_0010 == 0); // Zero flag not set
+        assert!(cpu.status & 0b1000_0000 == 0); // Negative flag not set
+    }
+    #[test]
+    fn test_0xb1_lda_zero_page_y_indirect_load_date() {
+        let mut cpu: CPU = CPU::new();
+        cpu.register_y = 1;
+        cpu.load(vec![0xb1, 0x05, 0x00]); // LDA Absolute 0x0005 BRK
+        cpu.mem_write(cpu.get_operand_address(&AddressingMode::Indirect_Y), 0x16);
+        cpu.program_counter = cpu.mem_read_u16(0xFFFC);
+        cpu.run();
+        assert_eq!(cpu.register_a, 0x16); // Value loaded onto Accumulator
+        assert!(cpu.status & 0b0000_0010 == 0); // Zero flag not set
         assert!(cpu.status & 0b1000_0000 == 0); // Negative flag not set
     }
     #[test]
@@ -350,6 +447,7 @@ mod test {
         cpu.run();
         assert_eq!(cpu.register_x, 1);
     }
+
     #[test]
     fn test_program_load() {
         let mut cpu: CPU = CPU::new();
@@ -377,10 +475,9 @@ mod test {
     }
 
     #[test]
-    fn test_lda_from_memory() {
+    fn test_mem_write() {
         let mut cpu: CPU = CPU::new();
-        cpu.mem_write(0x10, 0x55);
-        cpu.load_and_run(vec![0xa5, 0x10, 0x00]);
-        assert_eq!(cpu.register_a, 0x55);
+        cpu.mem_write(0xe8, 0xe8);
+        assert_eq!(cpu.memory[0xe8], 0xe8);
     }
 }

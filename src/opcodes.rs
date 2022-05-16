@@ -1071,13 +1071,13 @@ pub fn make_opcode_hashtable() -> HashMap<u8, OpCode> {
 }
 
 pub struct Instructions {
-    pub map: HashMap<u8, OpCode>
+    pub map: HashMap<u8, OpCode>,
 }
 
 impl Instructions {
     pub fn new() -> Self {
         Instructions {
-            map: make_opcode_hashtable()
+            map: make_opcode_hashtable(),
         }
     }
 }
