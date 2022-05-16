@@ -143,6 +143,7 @@ impl CPU {
         // Repeat
         '_cpu_cycle: loop {
             let opcode: u8 = self.mem_read(self.program_counter); // Fetch
+            
             let operation: &OpCode = instructions
                 .map
                 .get(&opcode)
@@ -640,5 +641,89 @@ mod test {
         cpu.run();
 
         assert_eq!(cpu.mem_read(0x1234), cpu.register_y);
+    }
+    #[test]
+    fn test_0x48_pha(){
+        let mut cpu: CPU = CPU::new();
+        let program: Vec<u8> = vec![0x48, 0x00];
+
+        cpu.register_a = 10;
+        cpu.load(program);
+        cpu.program_counter = cpu.mem_read_u16(0xFFFC);
+        cpu.run();
+
+        assert_eq!(cpu.mem_read(cpu.stack_start + cpu.stack_ptr.wrapping_add(1) as u16), 10);
+    }
+    #[test]
+    fn test_0x48_pha_underflow(){
+        let mut cpu: CPU = CPU::new();
+        let program: Vec<u8> = vec![0x48, 0x00];
+
+        cpu.register_a = 10;
+        cpu.stack_ptr = 0;
+        cpu.load(program);
+        cpu.program_counter = cpu.mem_read_u16(0xFFFC);
+        cpu.run();
+        
+        assert_eq!(cpu.mem_read(cpu.stack_start + cpu.stack_ptr.wrapping_add(1) as u16), 10);
+    }
+    #[test]
+    fn test_0x08_php(){
+        let mut cpu: CPU = CPU::new();
+        let program: Vec<u8> = vec![0x08, 0x00];
+
+        cpu.status = 0b1010_0001;
+        cpu.load(program);
+        cpu.program_counter = cpu.mem_read_u16(0xFFFC);
+        cpu.run();
+
+        assert_eq!(cpu.mem_read(cpu.stack_start + cpu.stack_ptr.wrapping_add(1) as u16), 0b1010_0001);
+    }
+    #[test]
+    fn test_0x08_php_underflow(){
+        let mut cpu: CPU = CPU::new();
+        let program: Vec<u8> = vec![0x08, 0x00];
+
+        cpu.status = 0b1010_0001;
+        cpu.stack_ptr = 0;
+        cpu.load(program);
+        cpu.program_counter = cpu.mem_read_u16(0xFFFC);
+        cpu.run();
+        
+        assert_eq!(cpu.mem_read(cpu.stack_start + cpu.stack_ptr.wrapping_add(1) as u16), 0b1010_0001);
+    }
+    #[test]
+    fn test_0x68_pla_overflow(){
+        let mut cpu: CPU = CPU::new();
+        let program: Vec<u8> = vec![0x68, 0x00];
+
+        cpu.register_a = 10;
+        cpu.stack_ptr = 0;
+        cpu.pha();
+        cpu.register_a = 0;
+        
+        cpu.load(program);
+        cpu.program_counter = cpu.mem_read_u16(0xFFFC);
+        cpu.run();
+        
+        assert_eq!(cpu.register_a, 10);
+        assert_eq!(cpu.stack_ptr, 0);
+    }
+    #[test]
+    fn test_0x28_plp_overflow(){
+        let mut cpu: CPU = CPU::new();
+        let program: Vec<u8> = vec![0x28, 0x00];
+
+        cpu.status = 0b1001_0010;
+        cpu.stack_ptr = 0;
+        cpu.php();
+        cpu.status = 0;
+        
+        cpu.load(program);
+        cpu.program_counter = cpu.mem_read_u16(0xFFFC);
+        cpu.run();
+        
+        assert_eq!(cpu.status, 0b1001_0010);
+        assert_eq!(cpu.stack_ptr, 0);
     }
 }
