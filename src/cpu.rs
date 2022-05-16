@@ -200,7 +200,7 @@ impl CPU {
                 0xd8 => {}                                                  // CLD
                 0x58 => {}                                                  // CLI
                 0xb8 => {}                                                  // CLV
-                0x18 => {}                                                  // TODO: CLV
+                0x18 => {}                                                  // CLC
                 0x38 => {}                                                  // SEC
                 0x78 => {}                                                  // SEI
                 0xf8 => {}                                                  // SED

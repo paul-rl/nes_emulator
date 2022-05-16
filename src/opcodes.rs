@@ -927,7 +927,7 @@ pub fn make_opcode_hashtable() -> HashMap<u8, OpCode> {
         0x18,
         OpCode::new(
             0x18,
-            "CLV".to_string(),
+            "CLC".to_string(),
             1,
             2,
             AddressingMode::NoneAddressing,
