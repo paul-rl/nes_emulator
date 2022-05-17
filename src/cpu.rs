@@ -163,8 +163,8 @@ impl CPU {
                 0x69 | 0x65 | 0x75 | 0x6d | 0x7d | 0x79 | 0x61 | 0x71 => {} // ADC
                 0xe9 | 0xe5 | 0xf5 | 0xed | 0xfd | 0xf9 | 0xe1 | 0xf1 => {} // SBC
                 0x29 | 0x25 | 0x35 | 0x2d | 0x3d | 0x39 | 0x21 | 0x31 => self.and(&mode), // AND
-                0x49 | 0x45 | 0x55 | 0x4d | 0x5d | 0x59 | 0x41 | 0x51 => {} // EOR
-                0x09 | 0x05 | 0x15 | 0x0d | 0x1d | 0x19 | 0x01 | 0x11 => {} // ORA
+                0x49 | 0x45 | 0x55 | 0x4d | 0x5d | 0x59 | 0x41 | 0x51 => self.eor(&mode), // EOR
+                0x09 | 0x05 | 0x15 | 0x0d | 0x1d | 0x19 | 0x01 | 0x11 => self.ora(&mode), // ORA
                 0x0a | 0x06 | 0x16 | 0x0e | 0x1e => self.asl(&mode),        // ASL
                 0x4a | 0x46 | 0x56 | 0x4e | 0x5e => self.lsr(&mode),                     // LSR
                 0x2a | 0x26 | 0x36 | 0x2e | 0x3e => self.rol(&mode),                      // ROL
@@ -403,6 +403,18 @@ impl CPU {
         if result == 0 {
             self.status = self.status | 0b0000_0010;
         }
+    }
+    // EOR: "Exclusive OR" Memory with Accumulator
+    fn eor(&mut self, mode: &AddressingMode) {
+        let data: u8 = self.mem_read(self.get_operand_address(mode) as u16);
+        self.register_a = self.register_a ^ data;
+        self.update_zero_and_negative_flags(self.register_a);
+    }
+    // ORA: "OR" Memory with Accumulator
+    fn ora(&mut self, mode: &AddressingMode) {
+        let data: u8 = self.mem_read(self.get_operand_address(mode) as u16);
+        self.register_a = self.register_a | data;
+        self.update_zero_and_negative_flags(self.register_a);
     }
     fn update_zero_and_negative_flags(&mut self, result: u8) {
         // Set flags depending on Accumulator value
@@ -973,5 +985,55 @@ mod test {
         assert!(cpu.status & 0b0000_0010 == 0);
         assert!(cpu.status & 0b1000_0000 == ((cpu.mem_read_u16(0xf800) as u8) & 0b1000_0000));
         assert!(cpu.status & 0b0100_0000 == ((cpu.mem_read_u16(0xf800) as u8) & 0b0100_0000));
+    }
+    #[test]
+    fn test_0x49_eor_immediate() {
+        let mut cpu: CPU = CPU::new();
+        cpu.register_a = 0b1111_0001;
+        let eor_result: u8 = cpu.register_a ^ 0b1010_1111;
+        
+        cpu.load(vec![0x49, 0b1010_1111, 0x00]);
+        cpu.program_counter = cpu.mem_read_u16(0xFFFC);
+        cpu.run();
+
+        assert_eq!(cpu.register_a, eor_result);
+    }
+    #[test]
+    fn test_0x4d_eor_absolute() {
+        let mut cpu: CPU = CPU::new();
+        cpu.register_a = 0b1111_0001;
+        cpu.mem_write(0x2a42, 0b1010_1111);
+        let eor_result: u8 = cpu.register_a ^ 0b1010_1111;
+
+        cpu.load(vec![0x4d, 0x42, 0x2a, 0x00]);
+        cpu.program_counter = cpu.mem_read_u16(0xFFFC);
+        cpu.run();
+
+        assert_eq!(cpu.register_a, eor_result);
+    }
+    #[test]
+    fn test_0x09_ora_immediate() {
+        let mut cpu: CPU = CPU::new();
+        cpu.register_a = 0b1111_0001;
+        let or_result: u8 = cpu.register_a | 0b1010_1111;
+        
+        cpu.load(vec![0x09, 0b1010_1111, 0x00]);
+        cpu.program_counter = cpu.mem_read_u16(0xFFFC);
+        cpu.run();
+
+        assert_eq!(cpu.register_a, or_result);
+    }
+    #[test]
+    fn test_0x0d_ora_absolute() {
+        let mut cpu: CPU = CPU::new();
+        cpu.register_a = 0b1111_0001;
+        cpu.mem_write(0x2a42, 0b1010_1111);
+        let or_result: u8 = cpu.register_a | 0b1010_1111;
+
+        cpu.load(vec![0x0d, 0x42, 0x2a, 0x00]);
+        cpu.program_counter = cpu.mem_read_u16(0xFFFC);
+        cpu.run();
+
+        assert_eq!(cpu.register_a, or_result);
     }
 }
