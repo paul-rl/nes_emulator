@@ -167,8 +167,8 @@ impl CPU {
                 0x09 | 0x05 | 0x15 | 0x0d | 0x1d | 0x19 | 0x01 | 0x11 => {} // ORA
                 0x0a | 0x06 | 0x16 | 0x0e | 0x1e => self.asl(&mode),        // ASL
                 0x4a | 0x46 | 0x56 | 0x4e | 0x5e => self.lsr(&mode),                     // LSR
-                0x2a | 0x26 | 0x36 | 0x2e | 0x3e => {}                      // ROL
-                0x6a | 0x66 | 0x76 | 0x6e | 0x7e => {}                      // ROR
+                0x2a | 0x26 | 0x36 | 0x2e | 0x3e => self.rol(&mode),                      // ROL
+                0x6a | 0x66 | 0x76 | 0x6e | 0x7e => self.ror(&mode),                      // ROR
                 0xe6 | 0xf6 | 0xee | 0xfe => {}                             // INC
                 0xE8 => self.inx(),                                         // INX
                 0xc8 => {}                                                  // INY
@@ -357,6 +357,42 @@ impl CPU {
                 self.update_zero_and_negative_flags(data);
             }
         }
+    }
+    // ROL: Rotate Left
+    fn rol(&mut self, mode: &AddressingMode) {
+        let carry: u8 = self.status & 0b0000_0001;
+        // Perform rotation and store carry
+        self.asl(mode);
+        
+        // update 0th bit with carry's value before changed by asl
+        match mode {
+            AddressingMode::NoneAddressing => self.register_a = self.register_a | carry,
+            _ => {
+                let addr: u16 = self.get_operand_address(mode);
+                self.mem_write(addr, self.mem_read(addr) | carry);
+            },
+        }  
+    }
+    // ROR: Rotate Right
+    fn ror(&mut self, mode: &AddressingMode) {
+        let carry: u8 = self.status & 0b0000_0001;
+        // Perform rotation and store carry
+        self.lsr(mode);
+        
+        // update 7th bit with carry's value before changed by asl
+        match mode {
+            AddressingMode::NoneAddressing => {
+                self.register_a = self.register_a | (carry << 7);
+                self.update_zero_and_negative_flags(self.register_a);
+            }
+            _ => {
+                let addr: u16 = self.get_operand_address(mode);
+                let data: u8 = self.mem_read(addr) | (carry << 7);
+                self.mem_write(addr, data);
+                self.update_zero_and_negative_flags(data);
+            },
+        }
+       
     }
     fn update_zero_and_negative_flags(&mut self, result: u8) {
         // Set flags depending on Accumulator value
@@ -824,7 +860,7 @@ mod test {
         assert!(cpu.status & 0b0000_0001 != 0);
     }
     #[test]
-    fn test_0x4e_asl_memory() {
+    fn test_0x4e_lsr_memory() {
         let mut cpu: CPU = CPU::new();
         let program: Vec<u8> = vec![0x4e, 0x20, 0x21,0x00];
 
@@ -837,5 +873,63 @@ mod test {
         assert_eq!(cpu.mem_read_u16(0x2120), 0b0100_1010);
         assert!(cpu.status & 0b0000_0001 != 0);
     }
+    #[test]
+    fn test_0x2a_rol_acc() {
+        let mut cpu: CPU = CPU::new();
+        let program: Vec<u8> = vec![0x2a, 0x00];
 
+        cpu.register_a = 0b1001_0101;
+        cpu.status = 0b0000_0001;
+        cpu.load(program);
+        cpu.program_counter = cpu.mem_read_u16(0xFFFC);
+        cpu.run();
+
+        assert_eq!(cpu.register_a, 0b0010_1011);
+        assert!(cpu.status & 0b0000_0001 != 0);
+    }
+    #[test]
+    fn test_0x2e_rol_memory() {
+        let mut cpu: CPU = CPU::new();
+        let program: Vec<u8> = vec![0x2e, 0x20, 0x21,0x00];
+
+        cpu.mem_write_u16(0x2120, 0b1001_0101);
+        cpu.status = 0b0000_0001;
+
+        cpu.load(program);
+        cpu.program_counter = cpu.mem_read_u16(0xFFFC);
+        cpu.run();
+
+        assert_eq!(cpu.mem_read_u16(0x2120), 0b0010_1011);
+        assert!(cpu.status & 0b0000_0001 != 0);
+    }
+    #[test]
+    fn test_0x6a_ror_acc() {
+        let mut cpu: CPU = CPU::new();
+        let program: Vec<u8> = vec![0x6a, 0x00];
+
+        cpu.register_a = 0b1001_0101;
+        cpu.status = 0b0000_0001;
+
+        cpu.load(program);
+        cpu.program_counter = cpu.mem_read_u16(0xFFFC);
+        cpu.run();
+
+        assert_eq!(cpu.register_a, 0b1100_1010);
+        assert!(cpu.status & 0b0000_0001 != 0);
+    }
+    #[test]
+    fn test_0x6e_ror_memory() {
+        let mut cpu: CPU = CPU::new();
+        let program: Vec<u8> = vec![0x6e, 0x20, 0x21,0x00];
+
+        cpu.mem_write_u16(0x2120, 0b1001_0101);
+        cpu.status = 0b0000_0001;
+
+        cpu.load(program);
+        cpu.program_counter = cpu.mem_read_u16(0xFFFC);
+        cpu.run();
+
+        assert_eq!(cpu.mem_read_u16(0x2120), 0b1100_1010);
+        assert!(cpu.status & 0b0000_0001 != 0);
+    }
 }
