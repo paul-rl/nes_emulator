@@ -326,12 +326,14 @@ impl CPU {
                 self.update_zero_and_negative_flags(self.register_a);
             }
             _ => {
-                let data: u8 = self.mem_read(self.get_operand_address(mode));
+                let addr: u16 = self.get_operand_address(mode);
+                let data: u8 = self.mem_read(addr);
 
-                self.mem_write(data as u16, data << 1);
+                self.mem_write(addr, data << 1);
 
                 self.status = self.status | data >> 7;
                 self.update_zero_and_negative_flags(data);
+
             }
         }
     }
@@ -758,4 +760,33 @@ mod test {
         assert_eq!(cpu.status, 0b1001_0010);
         assert_eq!(cpu.stack_ptr, 0);
     }
+    #[test]
+    fn test_0x0a_asl_acc() {
+        let mut cpu: CPU = CPU::new();
+        let program: Vec<u8> = vec![0x0a, 0x00];
+
+        cpu.register_a = 0b1001_0101;
+
+        cpu.load(program);
+        cpu.program_counter = cpu.mem_read_u16(0xFFFC);
+        cpu.run();
+
+        assert_eq!(cpu.register_a, 0b0010_1010);
+        assert!(cpu.status & 0b0000_0001 != 0);
+    }
+    #[test]
+    fn test_0x0e_asl_memory() {
+        let mut cpu: CPU = CPU::new();
+        let program: Vec<u8> = vec![0x0e, 0x20, 0x21,0x00];
+
+        cpu.mem_write_u16(0x2120, 0b1001_0101);
+
+        cpu.load(program);
+        cpu.program_counter = cpu.mem_read_u16(0xFFFC);
+        cpu.run();
+
+        assert_eq!(cpu.mem_read_u16(0x2120), 0b0010_1010);
+        assert!(cpu.status & 0b0000_0001 != 0);
+    }
+
 }
