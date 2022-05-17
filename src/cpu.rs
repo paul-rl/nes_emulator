@@ -169,9 +169,9 @@ impl CPU {
                 0x4a | 0x46 | 0x56 | 0x4e | 0x5e => self.lsr(&mode),                     // LSR
                 0x2a | 0x26 | 0x36 | 0x2e | 0x3e => self.rol(&mode),                      // ROL
                 0x6a | 0x66 | 0x76 | 0x6e | 0x7e => self.ror(&mode),                      // ROR
-                0xe6 | 0xf6 | 0xee | 0xfe => {}                             // INC
+                0xe6 | 0xf6 | 0xee | 0xfe => self.inc(&mode),                             // INC
                 0xE8 => self.inx(),                                         // INX
-                0xc8 => {}                                                  // INY
+                0xc8 => self.iny(),                                                  // INY
                 0xc6 | 0xd6 | 0xce | 0xde => self.dec(&mode),                             // DEC
                 0xca => self.dex(),                                                  // DEX
                 0x88 => self.dey(),                                                  // DEY
@@ -305,11 +305,21 @@ impl CPU {
         self.status = self.status | 0b0010_0000; // Set Break2
         self.status = self.status & 0b1110_1111; // Unset Break
     }
+    // INC: Increment Memory by One
+    fn inc(&mut self, mode: &AddressingMode) {
+        let addr: u16 = self.get_operand_address(mode);
+        self.mem_write_u16(addr, self.mem_read_u16(addr).wrapping_add(1));
+        self.update_zero_and_negative_flags(self.mem_read_u16(addr) as u8);
+    }
     // INX: Increment index X by one
     fn inx(&mut self) {
         self.register_x = self.register_x.wrapping_add(1);
-
         self.update_zero_and_negative_flags(self.register_x);
+    }
+    // INY: Incement Index Y by One
+    fn iny(&mut self){
+        self.register_y = self.register_y.wrapping_add(1);
+        self.update_zero_and_negative_flags(self.register_y);
     }
     // AND: "AND" Memory with Accumulator
     fn and(&mut self, mode: &AddressingMode) {
@@ -680,13 +690,35 @@ mod test {
         assert_eq!(cpu.register_x, 0xc1);
     }
     #[test]
-    fn test_inx_overflow() {
+    fn test_0xee_inc_absolute() {
+        let mut cpu: CPU = CPU::new();
+        let program: Vec<u8> = vec![0xee, 0x12, 0x34, 0x00];
+
+        cpu.mem_write_u16(0x3412, 10);
+
+        cpu.load(program);
+        cpu.program_counter = cpu.mem_read_u16(0xfffc);
+        cpu.run();
+
+        assert_eq!(cpu.mem_read_u16(0x3412), 10 + 1);
+    }
+    #[test]
+    fn test_0xe8_inx_overflow() {
         let mut cpu: CPU = CPU::new();
         cpu.register_x = 0xff;
         cpu.load(vec![0xe8, 0xe8, 0x00]);
         cpu.program_counter = cpu.mem_read_u16(0xFFFC);
         cpu.run();
         assert_eq!(cpu.register_x, 1);
+    }
+    #[test]
+    fn test_0xc8_iny_overflow() {
+        let mut cpu: CPU = CPU::new();
+        cpu.register_y = 0xff;
+        cpu.load(vec![0xc8, 0xc8, 0x00]);
+        cpu.program_counter = cpu.mem_read_u16(0xFFFC);
+        cpu.run();
+        assert_eq!(cpu.register_y, 1);
     }
     #[test]
     fn test_program_load() {
