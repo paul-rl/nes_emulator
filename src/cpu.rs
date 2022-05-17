@@ -190,7 +190,7 @@ impl CPU {
                 0xb0 => {}                                                  // BCS
                 0x90 => {}                                                  // BCC
                 0x10 => {}                                                  // BPL
-                0x24 | 0x2c => {}                                           // BIT
+                0x24 | 0x2c => self.bit(&mode),                                           // BIT
                 0xA9 | 0xa5 | 0xb5 | 0xad | 0xbd | 0xb9 | 0xa1 | 0xb1 => self.lda(&mode), // LDA
                 0xa2 | 0xa6 | 0xb6 | 0xae | 0xbe => self.ldx(&mode),        // LDX
                 0xa0 | 0xa4 | 0xb4 | 0xac | 0xbc => self.ldy(&mode),        // LDY
@@ -311,9 +311,8 @@ impl CPU {
     // AND: "AND" Memory with Accumulator
     fn and(&mut self, mode: &AddressingMode) {
         let data: u8 = self.mem_read(self.get_operand_address(mode) as u16);
-        println!("data is: {:b}", data);
-        println!("rega is: {:b}", self.register_a);
         self.register_a = self.register_a & data;
+        self.update_zero_and_negative_flags(self.register_a);
     }
     // ASL: Arithmetic Shift Left
     fn asl(&mut self, mode: &AddressingMode) {
@@ -393,6 +392,17 @@ impl CPU {
             },
         }
        
+    }
+    // BIT: Test Bits in Memory with Accumulator
+    fn bit(&mut self, mode: &AddressingMode) {
+        let data: u8 = self.mem_read(self.get_operand_address(mode) as u16);
+        let result: u8 = self.register_a & data;
+        
+        // Set N flag to M7, V flag to M6, Z flag to result of and
+        self.status = self.status | (0b1100_0000 & data);
+        if result == 0 {
+            self.status = self.status | 0b0000_0001;
+        }
     }
     fn update_zero_and_negative_flags(&mut self, result: u8) {
         // Set flags depending on Accumulator value
@@ -684,6 +694,19 @@ mod test {
         cpu.program_counter = cpu.mem_read_u16(0xFFFC);
         cpu.run();
         assert_eq!(cpu.register_a, and_result);
+        assert!(cpu.status & 0b1000_0000 != 0);
+    }
+    #[test]
+    fn test_0x2d_and_absolute() {
+        let mut cpu: CPU = CPU::new();
+        cpu.register_a = 0b1111_0001;
+        cpu.mem_write(0xaa42, 0b1010_1111);
+        let and_result: u8 = cpu.register_a & 0b1010_1111;
+        cpu.load(vec![0x2d, 0x42, 0xaa, 0x00]);
+        cpu.program_counter = cpu.mem_read_u16(0xFFFC);
+        cpu.run();
+        assert_eq!(cpu.register_a, and_result);
+        assert!(cpu.status & 0b1000_0000 != 0);
     }
     #[test]
     fn test_0x8d_sta_absolute() {
