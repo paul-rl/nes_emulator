@@ -288,6 +288,7 @@ impl CPU {
     }
     // PHA: Push Status On Stack
     fn php(&mut self) {
+        self.status = self.status | 0b0011_0000;
         self.mem_write(self.stack_start + self.stack_ptr as u16, self.status);
         self.stack_ptr = self.stack_ptr.wrapping_sub(1);
     }
@@ -301,6 +302,8 @@ impl CPU {
     fn plp(&mut self) {
         self.stack_ptr = self.stack_ptr.wrapping_add(1);
         self.status = self.mem_read(self.stack_start + self.stack_ptr as u16);
+        self.status = self.status | 0b0010_0000; // Set Break2
+        self.status = self.status & 0b1110_1111; // Unset Break
     }
     // INX: Increment index X by one
     fn inx(&mut self) {
