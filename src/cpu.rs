@@ -172,9 +172,9 @@ impl CPU {
                 0xe6 | 0xf6 | 0xee | 0xfe => {}                             // INC
                 0xE8 => self.inx(),                                         // INX
                 0xc8 => {}                                                  // INY
-                0xc6 | 0xd6 | 0xce | 0xde => {}                             // DEC
-                0xca => {}                                                  // DEX
-                0x88 => {}                                                  // DEY
+                0xc6 | 0xd6 | 0xce | 0xde => self.dec(&mode),                             // DEC
+                0xca => self.dex(),                                                  // DEX
+                0x88 => self.dey(),                                                  // DEY
                 0xc9 | 0xc5 | 0xd5 | 0xcd | 0xdd | 0xd9 | 0xc1 | 0xd1 => {} // CMP
                 0xc0 | 0xc4 | 0xcc => {}                                    // CPY
                 0xe0 | 0xe4 | 0xec => {}                                    // CPX
@@ -419,6 +419,25 @@ impl CPU {
         self.register_a = self.register_a | data;
         self.update_zero_and_negative_flags(self.register_a);
     }
+    // Arithmetic here!
+
+    //DEC: Decrement Memory by One
+    fn dec(&mut self, mode: &AddressingMode){
+        let addr: u16 = self.get_operand_address(mode);
+        self.mem_write_u16(addr, self.mem_read_u16(addr).wrapping_sub(1));
+        self.update_zero_and_negative_flags(self.mem_read_u16(addr) as u8);
+    }
+    //DEX: Decrement Register X by One
+    fn dex(&mut self){
+        self.register_x = self.register_x.wrapping_sub(1);
+        self.update_zero_and_negative_flags(self.register_x);
+    }
+    //DEY: Decrement Register Y by One
+    fn dey(&mut self){
+        self.register_y = self.register_y.wrapping_sub(1);
+        self.update_zero_and_negative_flags(self.register_y);
+    }
+
     fn update_zero_and_negative_flags(&mut self, result: u8) {
         // Set flags depending on Accumulator value
         // Check if Accumulator is 0
@@ -795,14 +814,14 @@ mod test {
         let mut cpu: CPU = CPU::new();
         let program: Vec<u8> = vec![0x08, 0x00];
 
-        cpu.status = 0b1010_0001;
+        cpu.status = 0b1100_0001;
         cpu.load(program);
         cpu.program_counter = cpu.mem_read_u16(0xFFFC);
         cpu.run();
 
         assert_eq!(
             cpu.mem_read(cpu.stack_start + cpu.stack_ptr.wrapping_add(1) as u16),
-            0b1010_0001
+            0b1111_0001
         );
     }
     #[test]
@@ -810,7 +829,7 @@ mod test {
         let mut cpu: CPU = CPU::new();
         let program: Vec<u8> = vec![0x08, 0x00];
 
-        cpu.status = 0b1010_0001;
+        cpu.status = 0b1100_0001;
         cpu.stack_ptr = 0;
         cpu.load(program);
         cpu.program_counter = cpu.mem_read_u16(0xFFFC);
@@ -818,7 +837,7 @@ mod test {
 
         assert_eq!(
             cpu.mem_read(cpu.stack_start + cpu.stack_ptr.wrapping_add(1) as u16),
-            0b1010_0001
+            0b1111_0001
         );
     }
     #[test]
@@ -843,7 +862,7 @@ mod test {
         let mut cpu: CPU = CPU::new();
         let program: Vec<u8> = vec![0x28, 0x00];
 
-        cpu.status = 0b1001_0010;
+        cpu.status = 0b1100_0001;
         cpu.stack_ptr = 0;
         cpu.php();
         cpu.status = 0;
@@ -852,7 +871,7 @@ mod test {
         cpu.program_counter = cpu.mem_read_u16(0xFFFC);
         cpu.run();
 
-        assert_eq!(cpu.status, 0b1001_0010);
+        assert_eq!(cpu.status, 0b1110_0001);
         assert_eq!(cpu.stack_ptr, 0);
     }
     #[test]
@@ -1038,5 +1057,44 @@ mod test {
         cpu.run();
 
         assert_eq!(cpu.register_a, or_result);
+    }
+    #[test]
+    fn test_0xce_dec_absolute() {
+        let mut cpu: CPU = CPU::new();
+        let program: Vec<u8> = vec![0xce, 0x12, 0x34, 0x00];
+
+        cpu.mem_write_u16(0x3412, 10);
+
+        cpu.load(program);
+        cpu.program_counter = cpu.mem_read_u16(0xfffc);
+        cpu.run();
+
+        assert_eq!(cpu.mem_read_u16(0x3412), 10 -1);
+    }
+    #[test]
+    fn test_0xca_dex_absolute() {
+        let mut cpu: CPU = CPU::new();
+        let program: Vec<u8> = vec![0xca, 0x00];
+
+        cpu.register_x = 10;
+
+        cpu.load(program);
+        cpu.program_counter = cpu.mem_read_u16(0xfffc);
+        cpu.run();
+
+        assert_eq!(cpu.register_x, 10 -1);
+    }
+    #[test]
+    fn test_0x88_dey_absolute() {
+        let mut cpu: CPU = CPU::new();
+        let program: Vec<u8> = vec![0x88, 0x00];
+
+        cpu.register_y = 10;
+
+        cpu.load(program);
+        cpu.program_counter = cpu.mem_read_u16(0xfffc);
+        cpu.run();
+
+        assert_eq!(cpu.register_y, 10 -1);
     }
 }
