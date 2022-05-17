@@ -401,7 +401,7 @@ impl CPU {
         // Set N flag to M7, V flag to M6, Z flag to result of and
         self.status = self.status | (0b1100_0000 & data);
         if result == 0 {
-            self.status = self.status | 0b0000_0001;
+            self.status = self.status | 0b0000_0010;
         }
     }
     fn update_zero_and_negative_flags(&mut self, result: u8) {
@@ -954,5 +954,24 @@ mod test {
 
         assert_eq!(cpu.mem_read_u16(0x2120), 0b1100_1010);
         assert!(cpu.status & 0b0000_0001 != 0);
+    }
+    #[test]
+    fn test_0x2c_bit_absolute(){
+        let mut cpu: CPU = CPU::new();
+        let program: Vec<u8> = vec![0x2c, 0x00, 0xf8,0x00];
+
+        cpu.mem_write_u16(0xf800, 0b1001_0101);
+        cpu.register_a = 0b0011_1001;
+
+        cpu.load(program);
+        cpu.program_counter = cpu.mem_read_u16(0xFFFC);
+        cpu.run();
+
+        assert_eq!(cpu.mem_read_u16(0xf800), 0b1001_0101);
+        assert_eq!(cpu.register_a, 0b0011_1001);
+        // Flags properly set
+        assert!(cpu.status & 0b0000_0010 == 0);
+        assert!(cpu.status & 0b1000_0000 == ((cpu.mem_read_u16(0xf800) as u8) & 0b1000_0000));
+        assert!(cpu.status & 0b0100_0000 == ((cpu.mem_read_u16(0xf800) as u8) & 0b0100_0000));
     }
 }
