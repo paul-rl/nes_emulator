@@ -589,7 +589,7 @@ pub fn make_opcode_hashtable() -> HashMap<u8, OpCode> {
             "JMP".to_string(),
             3,
             3,
-            AddressingMode::NoneAddressing,
+            AddressingMode::Absolute,
         ),
     );
     retval.insert(

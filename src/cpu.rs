@@ -143,7 +143,7 @@ impl CPU {
         // Repeat
         '_cpu_cycle: loop {
             let opcode: u8 = self.mem_read(self.program_counter); // Fetch
-
+            println!("About to read from 0x{:x} instruction is 0x{:x}", self.program_counter, opcode);
             let operation: &OpCode = instructions
                 .map
                 .get(&opcode)
@@ -178,7 +178,7 @@ impl CPU {
                 0xc9 | 0xc5 | 0xd5 | 0xcd | 0xdd | 0xd9 | 0xc1 | 0xd1 => {} // CMP
                 0xc0 | 0xc4 | 0xcc => {}                                    // CPY
                 0xe0 | 0xe4 | 0xec => {}                                    // CPX
-                0x4c | 0x6c => {}                                           // JMP
+                0x4c | 0x6c => self.jmp(&mode),                                           // JMP
                 0x20 => {}                                                  // JSR
                 0x60 => {}                                                  // RTS
                 0x40 => {}                                                  // RTI
@@ -431,23 +431,48 @@ impl CPU {
     }
     // Arithmetic here!
 
-    //DEC: Decrement Memory by One
+    // DEC: Decrement Memory by One
     fn dec(&mut self, mode: &AddressingMode){
         let addr: u16 = self.get_operand_address(mode);
         self.mem_write_u16(addr, self.mem_read_u16(addr).wrapping_sub(1));
         self.update_zero_and_negative_flags(self.mem_read_u16(addr) as u8);
     }
-    //DEX: Decrement Register X by One
+    // DEX: Decrement Register X by One
     fn dex(&mut self){
         self.register_x = self.register_x.wrapping_sub(1);
         self.update_zero_and_negative_flags(self.register_x);
     }
-    //DEY: Decrement Register Y by One
-    fn dey(&mut self){
+    // DEY: Decrement Register Y by One
+    fn dey(&mut self) {
         self.register_y = self.register_y.wrapping_sub(1);
         self.update_zero_and_negative_flags(self.register_y);
     }
+    // JMP: JMP Indirect
+    fn jmp(&mut self, mode: &AddressingMode) {
+        match mode {
+            AddressingMode::Absolute => self.program_counter = self.mem_read_u16(self.program_counter),
+            _ => {
+                // Absolute Indirect Addressing only for jmp
+                let addr: u16 = self.mem_read_u16(self.program_counter);
+                // Get lo byte from memory @ second byte
+                
+                // Get hi byte from memory @ (second byte + 1)
+                // Bug in 6502 makes it so when crossing pages in absolute indirect jmp
+                // memory isn't read from next apge but start of page.
+                // If address $3000 contains $40, $30FF contains $80, and $3100 contains $50,
+                // The result is $4080, not $5080.
+                let result: u16 = if addr & 0x00FF == 0xFF {
+                    let lo: u8 = self.mem_read(addr);
+                    let hi: u8 = self.mem_read(addr & 0xFF00);
+                    (hi as u16) << 8 | lo as u16
+                } else {
+                    self.mem_read_u16(addr)
+                };
 
+                self.program_counter = result;
+            },
+        }
+    }
     fn update_zero_and_negative_flags(&mut self, result: u8) {
         // Set flags depending on Accumulator value
         // Check if Accumulator is 0
@@ -1127,6 +1152,55 @@ mod test {
         cpu.program_counter = cpu.mem_read_u16(0xfffc);
         cpu.run();
 
-        assert_eq!(cpu.register_y, 10 -1);
+        assert_eq!(cpu.register_y, 10 - 1);
+    }
+    #[test]
+    fn test_0x4c_jmp_absolute() {
+        let mut cpu: CPU = CPU::new();
+        let program: Vec<u8> = vec![0x4c, 0x57, 0x79, 0x00];
+        
+        cpu.mem_write_u16(0x7957, 0x00);
+
+        cpu.load(program);
+        cpu.program_counter = cpu.mem_read_u16(0xfffc);
+        cpu.run();
+
+        // -1 since it moves +1 to get BRK instruction
+        assert_eq!(cpu.program_counter - 1, 0x7957);
+    }
+    #[test]
+    fn test_0x6c_jmp_absolute_indirect() {
+        let mut cpu: CPU = CPU::new();
+        let program: Vec<u8> = vec![0x6c, 0x57, 0x79, 0x00];
+        
+        cpu.mem_write_u16(0x7957, 0x2222);
+        cpu.mem_write_u16(0x2222, 0x00);
+        
+        
+
+        cpu.load(program);
+        cpu.program_counter = cpu.mem_read_u16(0xfffc);
+        cpu.run();
+
+        // -1 since it moves +1 to get BRK instruction
+        assert_eq!(cpu.program_counter - 1, 0x2222);        
+    }
+    #[test]
+    fn test_0x6c_jmp_absolute_indirect_pageend() {
+        let mut cpu: CPU = CPU::new();
+        let program: Vec<u8> = vec![0x6c, 0xff, 0x30, 0x00];
+        
+        cpu.mem_write_u16(0x3000, 0x40);
+        cpu.mem_write_u16(0x30ff, 0x80);
+        cpu.mem_write_u16(0x3100, 0x50);
+        cpu.mem_write(0x4080, 0x00);
+        
+
+        cpu.load(program);
+        cpu.program_counter = cpu.mem_read_u16(0xfffc);
+        cpu.run();
+
+        // -1 since it moves +1 to get BRK instruction
+        assert_eq!(cpu.program_counter - 1, 0x4080);        
     }
 }
