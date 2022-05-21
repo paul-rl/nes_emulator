@@ -175,8 +175,8 @@ impl CPU {
             );
             // DECODE, then on match EXECUTE
             match opcode {
-                0x00 => return,                                             // BRK: Break
-                0xea => {}                                                  // NOP
+                0x00 => return,                                             // BRK
+                0xea => println!("NOP!"),                                                  // NOP
                 0x69 | 0x65 | 0x75 | 0x6d | 0x7d | 0x79 | 0x61 | 0x71 => {} // ADC
                 0xe9 | 0xe5 | 0xf5 | 0xed | 0xfd | 0xf9 | 0xe1 | 0xf1 => {} // SBC
                 0x29 | 0x25 | 0x35 | 0x2d | 0x3d | 0x39 | 0x21 | 0x31 => self.and(&mode), // AND
@@ -523,7 +523,7 @@ impl CPU {
     }
     // BMI: Branch on Result Minus
     fn bmi(&mut self) {
-        if self.status & 0b1000_0000 == 1 {    
+        if self.status & 0b1000_0000 != 0 {    
             let jump: i8 = self.mem_read_u16(self.program_counter) as i8;    
             self.program_counter = self.program_counter.wrapping_add(1).wrapping_add(jump as u16);
         }
@@ -1360,5 +1360,214 @@ mod test {
         // + 1 from RTS, +1 from reading next instruction
         assert_eq!(cpu.program_counter, 0x8523 + 1 + 1);
     }
-    
+    #[test]
+    fn test_0x90_bcc(){
+        let mut cpu: CPU = CPU::new();
+        let program: Vec<u8> = vec![0x90, 0x45, 0x00];
+        cpu.status = 0b1111_1110;  
+
+        cpu.mem_write(cpu.program_counter.wrapping_add(0x8047), 0xe8);
+        
+        cpu.load(program);
+        cpu.program_counter = cpu.mem_read_u16(0xfffc);
+        cpu.run();
+
+        assert_eq!(cpu.register_x, 1);
+    }
+    #[test]
+    fn test_0xb0_bcs(){
+        let mut cpu: CPU = CPU::new();
+        let program: Vec<u8> = vec![0xb0, 0x45, 0x00];
+        cpu.status = 0b0000_0001;  
+
+        cpu.mem_write(cpu.program_counter.wrapping_add(0x8047), 0xe8);
+        
+        cpu.load(program);
+        cpu.program_counter = cpu.mem_read_u16(0xfffc);
+        cpu.run();
+
+        assert_eq!(cpu.register_x, 1);
+    }
+    #[test]
+    fn test_0xf0_beq(){
+        let mut cpu: CPU = CPU::new();
+        let program: Vec<u8> = vec![0xf0, 0x45, 0x00];
+        cpu.status = 0b0000_0010;  
+
+        cpu.mem_write(cpu.program_counter.wrapping_add(0x8047), 0xe8);
+        
+        cpu.load(program);
+        cpu.program_counter = cpu.mem_read_u16(0xfffc);
+        cpu.run();
+
+        assert_eq!(cpu.register_x, 1);
+    }
+    #[test]
+    fn test_0x30_bmi(){
+        let mut cpu: CPU = CPU::new();
+        let program: Vec<u8> = vec![0x30, 0x45, 0x00];
+        cpu.status = 0b1000_0000;  
+
+        cpu.mem_write(cpu.program_counter.wrapping_add(0x8047), 0xe8);
+        
+        cpu.load(program);
+        cpu.program_counter = cpu.mem_read_u16(0xfffc);
+        cpu.run();
+
+        assert_eq!(cpu.register_x, 1);
+    }
+    #[test]
+    fn test_0xd0_bne(){
+        let mut cpu: CPU = CPU::new();
+        let program: Vec<u8> = vec![0xd0, 0x45, 0x00];
+        cpu.status = 0b1111_1101;  
+
+        cpu.mem_write(cpu.program_counter.wrapping_add(0x8047), 0xe8);
+        
+        cpu.load(program);
+        cpu.program_counter = cpu.mem_read_u16(0xfffc);
+        cpu.run();
+
+        assert_eq!(cpu.register_x, 1);
+    }
+    #[test]
+    fn test_0x10_bpl(){
+        let mut cpu: CPU = CPU::new();
+        let program: Vec<u8> = vec![0x10, 0x45, 0x00];
+        cpu.status = 0b0111_1111;  
+
+        cpu.mem_write(cpu.program_counter.wrapping_add(0x8047), 0xe8);
+        
+        cpu.load(program);
+        cpu.program_counter = cpu.mem_read_u16(0xfffc);
+        cpu.run();
+
+        assert_eq!(cpu.register_x, 1);
+    }
+    #[test]
+    fn test_0x50_bvc(){
+        let mut cpu: CPU = CPU::new();
+        let program: Vec<u8> = vec![0x50, 0x45, 0x00];
+        cpu.status = 0b1011_1111;  
+
+        cpu.mem_write(cpu.program_counter.wrapping_add(0x8047), 0xe8);
+        
+        cpu.load(program);
+        cpu.program_counter = cpu.mem_read_u16(0xfffc);
+        cpu.run();
+
+        assert_eq!(cpu.register_x, 1);
+    }
+    #[test]
+    fn test_0x70_bvs(){
+        let mut cpu: CPU = CPU::new();
+        let program: Vec<u8> = vec![0x70, 0x45, 0x00];
+        cpu.status = 0b0100_0000;  
+
+        cpu.mem_write(cpu.program_counter.wrapping_add(0x8047), 0xe8);
+        
+        cpu.load(program);
+        cpu.program_counter = cpu.mem_read_u16(0xfffc);
+        cpu.run();
+
+        assert_eq!(cpu.register_x, 1);
+    } 
+    #[test]
+    fn test_0x18_clc(){
+        let mut cpu: CPU = CPU::new();
+        let program: Vec<u8> = vec![0x18, 0x00];
+        cpu.status = 0b1111_1111;  
+
+        cpu.mem_write(cpu.program_counter.wrapping_add(0x8047), 0xe8);
+        
+        cpu.load(program);
+        cpu.program_counter = cpu.mem_read_u16(0xfffc);
+        cpu.run();
+
+        assert_eq!(cpu.status, 0b1111_1110);
+    } 
+    #[test]
+    fn test_0xd8_cld(){
+        let mut cpu: CPU = CPU::new();
+        let program: Vec<u8> = vec![0xd8, 0x00];
+        cpu.status = 0b1111_1111;  
+
+        cpu.mem_write(cpu.program_counter.wrapping_add(0x8047), 0xe8);
+        
+        cpu.load(program);
+        cpu.program_counter = cpu.mem_read_u16(0xfffc);
+        cpu.run();
+
+        assert_eq!(cpu.status, 0b1111_0111);
+    } 
+    #[test]
+    fn test_0x58_cli(){
+        let mut cpu: CPU = CPU::new();
+        let program: Vec<u8> = vec![0x58, 0x00];
+        cpu.status = 0b1111_1111;  
+
+        cpu.mem_write(cpu.program_counter.wrapping_add(0x8047), 0xe8);
+        
+        cpu.load(program);
+        cpu.program_counter = cpu.mem_read_u16(0xfffc);
+        cpu.run();
+
+        assert_eq!(cpu.status, 0b1111_1011);
+    } 
+    #[test]
+    fn test_0xb8_clv(){
+        let mut cpu: CPU = CPU::new();
+        let program: Vec<u8> = vec![0xb8, 0x00];
+        cpu.status = 0b1111_1111;  
+
+        cpu.mem_write(cpu.program_counter.wrapping_add(0x8047), 0xe8);
+        
+        cpu.load(program);
+        cpu.program_counter = cpu.mem_read_u16(0xfffc);
+        cpu.run();
+
+        assert_eq!(cpu.status, 0b1011_1111);
+    } 
+    #[test]
+    fn test_0x38_sec(){
+        let mut cpu: CPU = CPU::new();
+        let program: Vec<u8> = vec![0x38, 0x00];
+        cpu.status = 0b0000_0000;  
+
+        cpu.mem_write(cpu.program_counter.wrapping_add(0x8047), 0xe8);
+        
+        cpu.load(program);
+        cpu.program_counter = cpu.mem_read_u16(0xfffc);
+        cpu.run();
+
+        assert_eq!(cpu.status, 0b0000_0001);
+    }
+    #[test]
+    fn test_0xf8_sec(){
+        let mut cpu: CPU = CPU::new();
+        let program: Vec<u8> = vec![0xf8, 0x00];
+        cpu.status = 0b0000_0000;  
+
+        cpu.mem_write(cpu.program_counter.wrapping_add(0x8047), 0xe8);
+        
+        cpu.load(program);
+        cpu.program_counter = cpu.mem_read_u16(0xfffc);
+        cpu.run();
+
+        assert_eq!(cpu.status, 0b0000_1000);
+    }  
+    #[test]
+    fn test_0x78_sei(){
+        let mut cpu: CPU = CPU::new();
+        let program: Vec<u8> = vec![0x78, 0x00];
+        cpu.status = 0b0000_0000;  
+
+        cpu.mem_write(cpu.program_counter.wrapping_add(0x8047), 0xe8);
+        
+        cpu.load(program);
+        cpu.program_counter = cpu.mem_read_u16(0xfffc);
+        cpu.run();
+
+        assert_eq!(cpu.status, 0b0000_0100);
+    } 
 }
