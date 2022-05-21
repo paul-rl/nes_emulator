@@ -199,14 +199,14 @@ impl CPU {
                 0x20 => self.jsr(),                                                  // JSR
                 0x60 => self.rts(),                                                 // RTS
                 0x40 => self.rti(),                                                  // RTI
-                0xd0 => {}                                                  // BNE
-                0x70 => {}                                                  // BVS
-                0x50 => {}                                                  // BVC
-                0x30 => {}                                                  // BMI
-                0xf0 => {}                                                  // BEQ
-                0xb0 => {}                                                  // BCS
-                0x90 => {}                                                  // BCC
-                0x10 => {}                                                  // BPL
+                0xd0 => self.bne(),                                                  // BNE
+                0x70 => self.bvs(),                                                  // BVS
+                0x50 => self.bvc(),                                                  // BVC
+                0x30 => self.bmi(),                                                  // BMI
+                0xf0 => self.beq(),                                                  // BEQ
+                0xb0 => self.bcs(),                                                  // BCS
+                0x90 => self.bcc(),                                                  // BCC
+                0x10 => self.bpl(),                                                  // BPL
                 0x24 | 0x2c => self.bit(&mode),                                           // BIT
                 0xA9 | 0xa5 | 0xb5 | 0xad | 0xbd | 0xb9 | 0xa1 | 0xb1 => self.lda(&mode), // LDA
                 0xa2 | 0xa6 | 0xb6 | 0xae | 0xbe => self.ldx(&mode),        // LDX
@@ -214,13 +214,13 @@ impl CPU {
                 0x85 | 0x95 | 0x8d | 0x9d | 0x99 | 0x81 | 0x91 => self.sta(&mode), // STA
                 0x86 | 0x96 | 0x8e => self.stx(&mode),                      // STX
                 0x84 | 0x94 | 0x8c => self.sty(&mode),                      // STY
-                0xd8 => {}                                                  // CLD
-                0x58 => {}                                                  // CLI
-                0xb8 => {}                                                  // CLV
-                0x18 => {}                                                  // CLC
-                0x38 => {}                                                  // SEC
-                0x78 => {}                                                  // SEI
-                0xf8 => {}                                                  // SED
+                0xd8 => self.cld(),                                                  // CLD
+                0x58 => self.cli(),                                         // CLI
+                0xb8 => self.clv(),                                                  // CLV
+                0x18 => self.clc(),                                                  // CLC
+                0x38 => self.sec(),                                                  // SEC
+                0x78 => self.sei(),                                                  // SEI
+                0xf8 => self.sed(),                                                  // SED
                 0xaa => self.tax(),                                         // TAX
                 0xa8 => self.tay(),                                         // TAY
                 0xba => self.tsx(),                                         // TSX
@@ -500,6 +500,91 @@ impl CPU {
     fn rts(&mut self) {
         self.program_counter = self.stack_pop_u16().wrapping_add(1);
     }
+    // BCC: Branch on Carry Clear
+    fn bcc(&mut self) {
+        if self.status & 0b0000_0001 == 0 {
+            let jump: i8 = self.mem_read_u16(self.program_counter) as i8;
+            self.program_counter = self.program_counter.wrapping_add(1).wrapping_add(jump as u16);
+        }
+    }
+    // BCS: Branch on Carry Set
+    fn bcs(&mut self) {
+        if self.status & 0b0000_0001 != 0 {
+            let jump: i8 = self.mem_read_u16(self.program_counter) as i8;
+            self.program_counter = self.program_counter.wrapping_add(1).wrapping_add(jump as u16);
+        }
+    }
+    // BEQ: Branch on Result Zero
+    fn beq(&mut self) {
+        if self.status & 0b0000_0010 != 0 {
+            let jump: i8 = self.mem_read_u16(self.program_counter) as i8;
+            self.program_counter = self.program_counter.wrapping_add(1).wrapping_add(jump as u16);
+        }
+    }
+    // BMI: Branch on Result Minus
+    fn bmi(&mut self) {
+        if self.status & 0b1000_0000 == 1 {    
+            let jump: i8 = self.mem_read_u16(self.program_counter) as i8;    
+            self.program_counter = self.program_counter.wrapping_add(1).wrapping_add(jump as u16);
+        }
+    }
+    // BNE: Branch on Result Not Zero
+    fn bne(&mut self) {
+        if self.status & 0b0000_0010 == 0 {    
+            let jump: i8 = self.mem_read_u16(self.program_counter) as i8;    
+            self.program_counter = self.program_counter.wrapping_add(1).wrapping_add(jump as u16);
+        }
+    }
+    // BPL: Branch on Result Plus
+    fn bpl(&mut self) {
+        if self.status & 0b1000_0000 == 0 {    
+            let jump: i8 = self.mem_read_u16(self.program_counter) as i8;    
+            self.program_counter = self.program_counter.wrapping_add(1).wrapping_add(jump as u16);
+        }
+    }
+    // BVC: Branch on Overflow Clear
+    fn bvc(&mut self) {
+        if self.status & 0b0100_0000 == 0 {    
+            let jump: i8 = self.mem_read_u16(self.program_counter) as i8;    
+            self.program_counter = self.program_counter.wrapping_add(1).wrapping_add(jump as u16);
+        }
+    }
+    // BVS: Branch on Overflow Set
+    fn bvs(&mut self) {
+        if self.status & 0b0100_0000 != 0 {    
+            let jump: i8 = self.mem_read_u16(self.program_counter) as i8;    
+            self.program_counter = self.program_counter.wrapping_add(1).wrapping_add(jump as u16);
+        }
+    }
+    // CLC: Clear Carry Flag
+    fn clc(&mut self) {
+        self.status = self.status & 0b1111_1110;
+    }
+    // CLD: Clear Decimal Mode
+    fn cld(&mut self) {
+        self.status = self.status & 0b1111_0111;
+    }
+    // CLI: Clear Interrupt Disable
+    fn cli(&mut self) {
+        self.status = self.status & 0b1111_1011;
+    }
+    // CLV: Clear Overflow Flag
+    fn clv(&mut self) {
+        self.status = self.status & 0b1011_1111;
+    }
+    // SEC: Set Carry Flag
+    fn sec(&mut self) {
+        self.status = self.status | 0b0000_0001;
+    }
+    // SED: Set Decimal Mode
+    fn sed(&mut self) {
+        self.status = self.status | 0b0000_1000;
+    }
+    // SEI: Set Interrupt Disable
+    fn sei(&mut self) {
+        self.status = self.status | 0b0000_0100;
+    }
+
     fn update_zero_and_negative_flags(&mut self, result: u8) {
         // Set flags depending on Accumulator value
         // Check if Accumulator is 0
