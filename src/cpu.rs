@@ -1,3 +1,4 @@
+
 use crate::opcodes::Instructions;
 use crate::opcodes::OpCode;
 pub fn main() {}
@@ -177,8 +178,8 @@ impl CPU {
             match opcode {
                 0x00 => return,                                             // BRK
                 0xea => println!("NOP!"),                                                  // NOP
-                0x69 | 0x65 | 0x75 | 0x6d | 0x7d | 0x79 | 0x61 | 0x71 => {} // ADC
-                0xe9 | 0xe5 | 0xf5 | 0xed | 0xfd | 0xf9 | 0xe1 | 0xf1 => {} // SBC
+                0x69 | 0x65 | 0x75 | 0x6d | 0x7d | 0x79 | 0x61 | 0x71 => self.adc(&mode), // ADC
+                0xe9 | 0xe5 | 0xf5 | 0xed | 0xfd | 0xf9 | 0xe1 | 0xf1 => self.sbc(&mode), // SBC
                 0x29 | 0x25 | 0x35 | 0x2d | 0x3d | 0x39 | 0x21 | 0x31 => self.and(&mode), // AND
                 0x49 | 0x45 | 0x55 | 0x4d | 0x5d | 0x59 | 0x41 | 0x51 => self.eor(&mode), // EOR
                 0x09 | 0x05 | 0x15 | 0x0d | 0x1d | 0x19 | 0x01 | 0x11 => self.ora(&mode), // ORA
@@ -192,9 +193,9 @@ impl CPU {
                 0xc6 | 0xd6 | 0xce | 0xde => self.dec(&mode),                             // DEC
                 0xca => self.dex(),                                                  // DEX
                 0x88 => self.dey(),                                                  // DEY
-                0xc9 | 0xc5 | 0xd5 | 0xcd | 0xdd | 0xd9 | 0xc1 | 0xd1 => {} // CMP
-                0xc0 | 0xc4 | 0xcc => {}                                    // CPY
-                0xe0 | 0xe4 | 0xec => {}                                    // CPX
+                0xc9 | 0xc5 | 0xd5 | 0xcd | 0xdd | 0xd9 | 0xc1 | 0xd1 => self.cmp(&mode), // CMP
+                0xc0 | 0xc4 | 0xcc => self.cpy(&mode),                                    // CPY
+                0xe0 | 0xe4 | 0xec => self.cpx(&mode),                                    // CPX
                 0x4c | 0x6c => self.jmp(&mode),                                           // JMP
                 0x20 => self.jsr(),                                                  // JSR
                 0x60 => self.rts(),                                                 // RTS
@@ -442,7 +443,73 @@ impl CPU {
         self.register_a = self.register_a | data;
         self.update_zero_and_negative_flags(self.register_a);
     }
-    // Arithmetic here!
+    // ADC: Add Memory to Accumulator with Carry
+    fn adc(&mut self, mode: &AddressingMode) {
+        let data: u8 = self.mem_read(self.get_operand_address(mode));
+        self.actual_adc(data);
+    }
+    fn actual_adc(&mut self, to_add: u8){
+        let mut u16_result: u16 = self.register_a as u16 + to_add as u16;
+        if self.status & 0b0000_0001 != 0 {
+            u16_result += 1;
+        }
+        
+        if u16_result > 255 {
+            self.status = self.status | 0b000_0001;
+        }
+        let u8_result: u8 = u16_result as u8;
+        
+        // data ^ u8_result: do data and u8_result have the same sign
+        // u8_result ^ self.register_a: do u8_result and self.register_a have the same sign
+        // & 0x80: extract the sign
+        // != 0: do two numbers of same sign being added result in different sign
+        if (to_add ^ u8_result) & (u8_result ^ self.register_a) & 0x80 != 0 {
+            self.status = self.status | 0b0100_0000;
+        } else {
+            self.status = self.status & 0b1011_1111;
+        }
+
+        self.register_a = u8_result;
+        self.update_zero_and_negative_flags(self.register_a);
+    }
+    // CMP: Compare Memory and Accumulator
+    fn cmp(&mut self, mode: &AddressingMode) {
+        let mem_data: u8 = self.mem_read(self.get_operand_address(mode));
+        
+        if mem_data <= self.register_a {
+            self.status = self.status | 0b0000_0001;
+        } else {
+            self.status = self.status & 0b1111_1110;
+        }
+        self.update_zero_and_negative_flags(self.register_a.wrapping_sub(mem_data));
+    }
+    // CPX: Compare Index Register X To Memory
+    fn cpx(&mut self, mode: &AddressingMode) {
+        let mem_data: u8 = self.mem_read(self.get_operand_address(mode));
+        
+        if mem_data <= self.register_x {
+            self.status = self.status | 0b0000_0001;
+        } else {
+            self.status = self.status & 0b1111_1110;
+        }
+        self.update_zero_and_negative_flags(self.register_x.wrapping_sub(mem_data));
+    }
+    // CPY: Compare Index Register Y to Memory
+    fn cpy(&mut self, mode: &AddressingMode) {
+        let mem_data: u8 = self.mem_read(self.get_operand_address(mode));
+        
+        if mem_data <= self.register_y {
+            self.status = self.status | 0b0000_0001;
+        } else {
+            self.status = self.status & 0b1111_1110;
+        }
+        self.update_zero_and_negative_flags(self.register_y.wrapping_sub(mem_data));
+    }
+    // SBC: Subtract Memory from Accumulator with Borrow
+    fn sbc(&mut self, mode: &AddressingMode) {
+        let data: u8 = self.mem_read(self.get_operand_address(mode));
+        self.actual_adc((!data).wrapping_add(1));
+    }
 
     // DEC: Decrement Memory by One
     fn dec(&mut self, mode: &AddressingMode){
