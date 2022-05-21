@@ -187,7 +187,7 @@ impl CPU {
                 0x2a | 0x26 | 0x36 | 0x2e | 0x3e => self.rol(&mode),                      // ROL
                 0x6a | 0x66 | 0x76 | 0x6e | 0x7e => self.ror(&mode),                      // ROR
                 0xe6 | 0xf6 | 0xee | 0xfe => self.inc(&mode),                             // INC
-                0xE8 => self.inx(),                                         // INX
+                0xe8 => self.inx(),                                         // INX
                 0xc8 => self.iny(),                                                  // INY
                 0xc6 | 0xd6 | 0xce | 0xde => self.dec(&mode),                             // DEC
                 0xca => self.dex(),                                                  // DEX
@@ -1214,7 +1214,7 @@ mod test {
         assert_eq!(cpu.program_counter - 1, 0x2222);        
     }
     #[test]
-    fn test_0x6c_jmp_absolute_indirect_pageend() {
+    fn test_0x6c_jmp_absolute_indirect_page_end() {
         let mut cpu: CPU = CPU::new();
         let program: Vec<u8> = vec![0x6c, 0xff, 0x30, 0x00];
         
@@ -1231,4 +1231,49 @@ mod test {
         // -1 since it moves +1 to get BRK instruction
         assert_eq!(cpu.program_counter - 1, 0x4080);        
     }
+    #[test]
+    fn test_0x20_jsr(){
+        let mut cpu: CPU = CPU::new();
+        let program: Vec<u8> = vec![0x20, 0x20, 0x21, 0x00];
+        
+        cpu.mem_write(0x2120, 0xe8);
+
+        cpu.load(program);
+        cpu.program_counter = cpu.mem_read_u16(0xfffc);
+        let curr_pc: u16 = cpu.mem_read_u16(0xfffc) + 2;  
+        cpu.run();
+
+        assert_eq!(cpu.register_x, 1);
+        assert_eq!(cpu.stack_pop_u16(), curr_pc);
+    }
+    #[test]
+    fn test_0x40_rti(){
+        let mut cpu: CPU = CPU::new();
+        let program: Vec<u8> = vec![0x40, 0x00]; 
+        
+        cpu.stack_push_u16(0x8523); 
+        cpu.stack_push(0b1100_0101);
+        
+        cpu.load(program);
+        cpu.program_counter = cpu.mem_read_u16(0xfffc);
+        cpu.run();
+
+        assert_eq!(cpu.program_counter, 0x8523 + 1);
+        assert_eq!(cpu.status, 0b1100_0101);
+    }
+    #[test]
+    fn test_0x60_rts(){
+        let mut cpu: CPU = CPU::new();
+        let program: Vec<u8> = vec![0x60, 0x00];  
+
+        cpu.stack_push_u16(0x8523);
+        
+        cpu.load(program);
+        cpu.program_counter = cpu.mem_read_u16(0xfffc);
+        cpu.run();
+
+        // + 1 from RTS, +1 from reading next instruction
+        assert_eq!(cpu.program_counter, 0x8523 + 1 + 1);
+    }
+    
 }
