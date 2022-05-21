@@ -106,6 +106,23 @@ impl CPU {
         let hi: u16 = self.mem_read(addr + 1) as u16;
         (hi << 8) | (lo as u16)
     }
+    pub fn stack_push(&mut self, data: u8) {
+        self.mem_write(self.stack_start + self.stack_ptr as u16, data);
+        self.stack_ptr = self.stack_ptr.wrapping_sub(1);
+    }
+    pub fn stack_pop(&mut self) -> u8{
+        self.stack_ptr = self.stack_ptr.wrapping_add(1);
+        self.mem_read(self.stack_start + self.stack_ptr as u16)
+    }
+    pub fn stack_push_u16(&mut self, data: u16) { 
+        self.stack_push((data >> 8) as u8); // push hi
+        self.stack_push((data & 0x00ff) as u8); // push lo
+    }
+    pub fn stack_pop_u16(&mut self) -> u16 {
+        let lo: u16 = self.stack_pop() as u16;
+        let hi: u16 = self.stack_pop() as u16;
+        (hi << 8) | lo
+    }
     // When writing u16, take upper and lower 8 bits and store them in reverse order.
     pub fn mem_write_u16(&mut self, addr: u16, data: u16) {
         let hi: u8 = (data >> 8) as u8; // Extract last 8 bits
@@ -179,9 +196,9 @@ impl CPU {
                 0xc0 | 0xc4 | 0xcc => {}                                    // CPY
                 0xe0 | 0xe4 | 0xec => {}                                    // CPX
                 0x4c | 0x6c => self.jmp(&mode),                                           // JMP
-                0x20 => {}                                                  // JSR
-                0x60 => {}                                                  // RTS
-                0x40 => {}                                                  // RTI
+                0x20 => self.jsr(),                                                  // JSR
+                0x60 => self.rts(),                                                 // RTS
+                0x40 => self.rti(),                                                  // RTI
                 0xd0 => {}                                                  // BNE
                 0x70 => {}                                                  // BVS
                 0x50 => {}                                                  // BVC
@@ -283,25 +300,21 @@ impl CPU {
     }
     // PHA: Push Accumulator On Stack
     fn pha(&mut self) {
-        self.mem_write(self.stack_start + self.stack_ptr as u16, self.register_a);
-        self.stack_ptr = self.stack_ptr.wrapping_sub(1);
+        self.stack_push(self.register_a);
     }
     // PHA: Push Status On Stack
     fn php(&mut self) {
         self.status = self.status | 0b0011_0000;
-        self.mem_write(self.stack_start + self.stack_ptr as u16, self.status);
-        self.stack_ptr = self.stack_ptr.wrapping_sub(1);
+        self.stack_push(self.status);
     }
     // PLA: Pull Accumulator From Stack
     fn pla(&mut self) {
-        self.stack_ptr = self.stack_ptr.wrapping_add(1);
-        self.register_a = self.mem_read(self.stack_start + self.stack_ptr as u16);
+        self.register_a = self.stack_pop();
         self.update_zero_and_negative_flags(self.register_a);
     }
     // PLP: Pull Status From Stack
     fn plp(&mut self) {
-        self.stack_ptr = self.stack_ptr.wrapping_add(1);
-        self.status = self.mem_read(self.stack_start + self.stack_ptr as u16);
+        self.status = self.stack_pop();
         self.status = self.status | 0b0010_0000; // Set Break2
         self.status = self.status & 0b1110_1111; // Unset Break
     }
@@ -473,6 +486,20 @@ impl CPU {
             },
         }
     }
+    // JSR: Jump To Subroutine
+    fn jsr(&mut self) {
+        self.stack_push_u16(self.program_counter + 2 -  1); // -1 since we already incremented PC
+        self.program_counter = self.mem_read_u16(self.program_counter);
+    }
+    // RTI: Return From Interrupt
+    fn rti(&mut self) {
+        self.status = self.stack_pop();
+        self.program_counter = self.stack_pop_u16();
+    }
+    // RTS: Return From Subroutine
+    fn rts(&mut self) {
+        self.program_counter = self.stack_pop_u16().wrapping_add(1);
+    }
     fn update_zero_and_negative_flags(&mut self, result: u8) {
         // Set flags depending on Accumulator value
         // Check if Accumulator is 0
@@ -488,6 +515,7 @@ impl CPU {
             self.status = self.status & 0b0111_1111; // Unset Negative
         }
     }
+
 }
 
 #[cfg(test)]
