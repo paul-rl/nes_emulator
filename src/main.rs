@@ -1,8 +1,36 @@
 pub mod cpu;
 pub mod opcodes;
+use cpu::*;
+use sdl2::VideoSubsystem;
+use sdl2::event::Event;
+use sdl2::EventPump;
+use sdl2::keyboard::Keycode;
+use sdl2::pixels::Color;
+use sdl2::pixels::PixelFormatEnum;
+use sdl2::sys::Window;
+use sdl2::video::WindowBuilder;
+
 fn main() {
-    println!("Hello, world!");
-    let game_code = vec![
+    // init sdl2, use unwrap because it's outer layer
+    // No other layers can potentially handle errors and do something about it.
+    let sdl_context: sdl2::Sdl = sdl2::init().unwrap(); // Get our context
+    let video_subsystem: VideoSubsystem = sdl_context.video().unwrap(); // Get our video subsystem from context
+    let window = video_subsystem // Build our window
+        .window("Snake game", (32.0 * 10.0) as u32, (32.0 * 10.0) as u32)
+        .position_centered()
+        .build().unwrap();
+    
+    // Make our canvas and window
+    let mut canvas = window.into_canvas().present_vsync().build().unwrap();
+    let mut event_pump = sdl_context.event_pump().unwrap();
+    canvas.set_scale(10.0, 10.0).unwrap();
+
+    // Make a texture used for rendering
+    let creator = canvas.texture_creator();
+    // Make our 32x32 texture, each represented by 3 bytes (R, G, B)
+    let mut texture = creator.create_texture_target(PixelFormatEnum::RGB24, 32, 32).unwrap();
+
+    let _game_code = vec![
         0x20, 0x06, 0x06, 0x20, 0x38, 0x06, 0x20, 0x0d, 0x06, 0x20, 0x2a, 0x06, 0x60,//
     0xa9, 0x02, 0x85,//
         0x02, 0xa9, 0x04, 0x85, 0x03, 0xa9, 0x11, 0x85, 0x10, 0xa9, 0x10, 0x85, 0x12,//
@@ -43,4 +71,19 @@ fn main() {
     0xa2, 0x00, 0xea,//
         0xea, 0xca, 0xd0, 0xfb, 0x60 //
     ];
+
+    // load the game
+    let mut cpu = CPU::new();
+    cpu.load(_game_code);
+    cpu.reset();
+
+    // run the game cycle
+    cpu.run_with_callback( move |cpu| {
+        // TODO:
+        // read user input and write it to mem[0xFF]
+        // update mem[0xFE] with new Random Number
+        // read mem mapped screen state
+        // render screen state
+
+    });
 }
