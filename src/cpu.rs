@@ -149,9 +149,12 @@ impl CPU {
         self.status = 0;
         self.program_counter = self.mem_read_u16(0xFFFC);
     }
+    pub fn run(&mut self) { 
+        self.run_with_callback(|_| {});
+    }
     // Interprets instructions.
     // Takes mutable reference to self to change registers and program instructions.
-    pub fn run(&mut self) {
+    pub fn run_with_callback<F>(&mut self, mut callback: F) where F: FnMut(&mut CPU),{
         // Get our instruction set
         let instructions: Instructions = Instructions::new();
         // CPU Cycle:
@@ -160,6 +163,8 @@ impl CPU {
         // Execute
         // Repeat
         '_cpu_cycle: loop {
+            callback(self);
+            
             let opcode: u8 = self.mem_read(self.program_counter); // Fetch
             println!("About to read from 0x{:x} instruction is 0x{:x}", self.program_counter, opcode);
             let operation: &OpCode = instructions
