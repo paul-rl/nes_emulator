@@ -105,7 +105,15 @@ impl CPU {
     pub fn mem_read_u16(&self, addr: u16) -> u16 {
         let lo: u16 = self.mem_read(addr) as u16;
         let hi: u16 = self.mem_read(addr + 1) as u16;
+        
         (hi << 8) | (lo as u16)
+    }
+    pub fn print_memory(&self){
+        let mut addr = 0;
+        for item in self.memory.iter() {
+            println!("0x{:x}: 0x{:x}", addr, item);
+            addr += 1;
+        }
     }
     pub fn stack_push(&mut self, data: u8) {
         self.mem_write(self.stack_start + self.stack_ptr as u16, data);
@@ -139,8 +147,11 @@ impl CPU {
     }
     // Loads program into memory and sets PC to value found in 0xFFFC
     pub fn load(&mut self, program: Vec<u8>) {
-        self.memory[0x8000..(0x8000 + program.len())].copy_from_slice(&program[..]); // Load program into memory
-        self.mem_write_u16(0xFFFC, 0x8000);
+        self.load_at(program, 0x8000);
+    }
+    pub fn load_at(&mut self, program: Vec<u8>, addr: u16) {
+        self.memory[addr as usize..(addr as usize + program.len())].copy_from_slice(&program[..]); // Load program into memory
+        self.mem_write_u16(0xFFFC, addr);
     }
     // Restore set of all registers and initialize PC to 2 byte value stored in 0xFFFC
     pub fn reset(&mut self) {
@@ -166,7 +177,6 @@ impl CPU {
             callback(self);
             
             let opcode: u8 = self.mem_read(self.program_counter); // Fetch
-            println!("About to read from 0x{:x} instruction is 0x{:x}", self.program_counter, opcode);
             let operation: &OpCode = instructions
                 .map
                 .get(&opcode)
